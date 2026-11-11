@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Passepartout ändern lädt nicht mehr unnötig neu hoch: Eine Kopie mit dem gewünschten Passepartout, die schon auf dem Fernseher liegt, wird wiederverwendet. Das Add-on führt dazu Buch über alle seine Kopien auf dem Fernseher.
+- Direktes Ändern wird ohne Hochformat-Passepartout versucht; ein neuer Upload erfolgt nur, wenn der Fernseher die Änderung ablehnt.
+- ChatGPT: Option `passepartout` (mit/ohne) beim Import und beim Ändern. „Mit“ nutzt die neue Option `ai_matte` (Standard `modernthin_warm`).
+
 ## 0.4.0
 
 - ChatGPT-Anbindung: eigener GPT mit Aktion. Neues Schema unter `/gpt/openapi.json` (ohne Token abrufbar, nur die für den Chat nötigen Funktionen, kein Löschen).

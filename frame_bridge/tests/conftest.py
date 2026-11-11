@@ -28,6 +28,8 @@ class FakeFrame:
         self.width_of: dict[str, int] = {}
         self.ignore_matte = False  # like a TV that silently refuses a matte
         self.deleted: list[str] = []
+        self.refuse_all_changes = False  # the user's 2025 Frame: change_matte always error -7
+        self.uploads = 0
 
     configured = True
     paired = True
@@ -59,6 +61,7 @@ class FakeFrame:
     async def upload(self, jpeg, matte="none"):
         self._check()
         self._n += 1
+        self.uploads += 1
         cid = f"MY_F{self._n:04d}"
         self.images[cid] = jpeg
         try:
@@ -86,7 +89,7 @@ class FakeFrame:
 
     async def change_matte(self, content_id, matte_id):
         self._check()
-        if matte_id != "none" and self.width_of.get(content_id, 3840) >= 3840:
+        if self.refuse_all_changes or (matte_id != "none" and self.width_of.get(content_id, 3840) >= 3840):
             raise MatteRefused("Der Fernseher lässt für dieses Bild kein Passepartout zu.")  # error -7
         if not self.ignore_matte:
             self.matte_of[content_id] = matte_id

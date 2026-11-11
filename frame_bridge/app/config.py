@@ -22,6 +22,7 @@ class Settings:
     matte: str = "none"
     log_level: str = "info"
     public_url: str = ""
+    ai_matte: str = "modernthin_warm"  # "with matte" for AI assistants
     data_dir: Path = field(default_factory=lambda: DATA_DIR)
 
     @property

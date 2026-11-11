@@ -72,6 +72,19 @@ class ImageStore:
             self._db.execute("ALTER TABLE images ADD COLUMN matte TEXT NOT NULL DEFAULT 'none'")
         if "tv_variant" not in cols:  # databases up to 0.2.2
             self._db.execute("ALTER TABLE images ADD COLUMN tv_variant TEXT NOT NULL DEFAULT 'full'")
+        # every copy this add-on put on the TV, so an existing one can be reused instead of uploading again
+        self._db.execute(
+            """CREATE TABLE IF NOT EXISTS tv_copies (
+                content_id TEXT PRIMARY KEY,
+                image_id TEXT NOT NULL,
+                variant TEXT NOT NULL,
+                matte TEXT NOT NULL
+            )"""
+        )
+        self._db.execute(
+            "INSERT OR IGNORE INTO tv_copies SELECT tv_content_id, id, tv_variant, "
+            "CASE WHEN tv_variant='full' THEN 'none' ELSE matte END FROM images WHERE tv_content_id IS NOT NULL"
+        )
         self._db.commit()
 
     @staticmethod
@@ -112,11 +125,36 @@ class ImageStore:
         with self._lock:
             return self._db.execute("SELECT COUNT(*) FROM images").fetchone()[0]
 
-    def set_tv_content_id(self, image_id: str, content_id: str | None, variant: str = "full") -> None:
+    def set_tv_content_id(self, image_id: str, content_id: str | None, variant: str = "full",
+                          matte: str | None = None) -> None:
+        """Marks the copy currently in use for this picture (and records it as one of its copies)."""
         validate_id(image_id)
         with self._lock:
             self._db.execute("UPDATE images SET tv_content_id=?, tv_variant=? WHERE id=?",
                              (content_id, variant, image_id))
+            if content_id:
+                self._db.execute(
+                    "INSERT INTO tv_copies VALUES (?,?,?,?) ON CONFLICT(content_id) DO UPDATE SET "
+                    "image_id=excluded.image_id, variant=excluded.variant, matte=excluded.matte",
+                    (content_id, image_id, variant, matte or "none"))
+            self._db.commit()
+
+    def copies(self, image_id: str) -> list[dict]:
+        validate_id(image_id)
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM tv_copies WHERE image_id=?", (image_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def set_copy_matte(self, content_id: str, matte: str) -> None:
+        with self._lock:
+            self._db.execute("UPDATE tv_copies SET matte=? WHERE content_id=?", (matte, content_id))
+            self._db.commit()
+
+    def forget_copy(self, content_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM tv_copies WHERE content_id=?", (content_id,))
+            self._db.execute("UPDATE images SET tv_content_id=NULL, tv_variant='full' WHERE tv_content_id=?",
+                             (content_id,))
             self._db.commit()
 
     def set_matte(self, image_id: str, matte: str) -> None:
@@ -126,8 +164,13 @@ class ImageStore:
             self._db.commit()
 
     def find_by_tv_content_id(self, content_id: str) -> ImageRecord | None:
+        """The gallery picture a TV copy belongs to (current or an older copy)."""
         with self._lock:
             row = self._db.execute("SELECT * FROM images WHERE tv_content_id=?", (content_id,)).fetchone()
+            if row is None:
+                row = self._db.execute(
+                    "SELECT images.* FROM images JOIN tv_copies ON tv_copies.image_id = images.id "
+                    "WHERE tv_copies.content_id=?", (content_id,)).fetchone()
         return ImageRecord(**dict(row)) if row else None
 
     def delete(self, image_id: str) -> bool:
@@ -135,6 +178,7 @@ class ImageStore:
         validate_id(image_id)
         with self._lock:
             cur = self._db.execute("DELETE FROM images WHERE id=?", (image_id,))
+            self._db.execute("DELETE FROM tv_copies WHERE image_id=?", (image_id,))
             self._db.commit()
         for p in (self.image_path(image_id), self.thumb_path(image_id)):
             p.unlink(missing_ok=True)

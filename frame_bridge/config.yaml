@@ -1,5 +1,5 @@
 name: The Frame Bridge
-version: "0.4.0"
+version: "0.5.0"
 slug: frame_bridge
 description: Bildergalerie, Upload und REST-API für Samsung The Frame
 url: https://github.com/mcfennek/ha-frame-bridge
@@ -28,6 +28,7 @@ options:
   matte: none
   log_level: info
   public_url: ""
+  ai_matte: modernthin_warm
 schema:
   tv_host: str?
   media_player_entity: str?
@@ -36,3 +37,4 @@ schema:
   matte: str
   log_level: list(debug|info|warning|error)
   public_url: str?
+  ai_matte: str

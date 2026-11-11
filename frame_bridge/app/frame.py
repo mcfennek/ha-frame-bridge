@@ -267,7 +267,8 @@ class SamsungFrame:
             from samsungframetv import exceptions as tv_exc
 
             try:
-                await art.change_matte(content_id, matte_id, portrait_matte=matte_id)
+                # no portrait matte: sending one is a suspected cause of error -7 on the 2025 Frame
+                await art.change_matte(content_id, matte_id)
             except tv_exc.ResponseError as exc:
                 if "-7" in str(exc):
                     raise MatteRefused("Der Fernseher lässt für dieses Bild kein Passepartout zu.") from exc

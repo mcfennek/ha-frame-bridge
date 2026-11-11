@@ -124,3 +124,49 @@ def test_gpt_schema_public_and_complete(env):
 def test_gpt_schema_falls_back_to_forwarded_host(env):
     spec = env["external"].get("/gpt/openapi.json", headers={"x-forwarded-host": "frame.example.org"}).json()
     assert spec["servers"][0]["url"] == "https://frame.example.org"
+
+
+def test_import_with_passepartout_uses_ai_matte(env, links):
+    links["https://files.example/a"] = make_jpeg(fmt="PNG")
+    body = env["external"].post("/api/images/import", headers=auth(env), json={
+        "openaiFileIdRefs": [ref("https://files.example/a")], "passepartout": True}).json()
+    img = body["images"][0]
+    assert img["matte"] == "modernthin_warm"
+    assert env["frame"].matte_of[img["tv_content_id"]] == "modernthin_warm"
+
+
+def test_import_without_passepartout_is_4k(env, links):
+    links["https://files.example/a"] = make_jpeg(fmt="PNG")
+    img = env["external"].post("/api/images/import", headers=auth(env), json={
+        "openaiFileIdRefs": [ref("https://files.example/a")], "passepartout": False}).json()["images"][0]
+    assert img["matte"] == "none" and env["frame"].width_of[img["tv_content_id"]] == 3840
+
+
+def test_ai_matte_is_configurable_and_explicit_matte_wins(env, links):
+    env["settings"].ai_matte = "shadowbox_polar"
+    links["https://files.example/a"] = make_jpeg(fmt="PNG")
+    a = env["external"].post("/api/images/import", headers=auth(env), json={
+        "openaiFileIdRefs": [ref("https://files.example/a")], "passepartout": True, "display": False}).json()
+    b = env["external"].post("/api/images/import", headers=auth(env), json={
+        "openaiFileIdRefs": [ref("https://files.example/a")], "passepartout": True, "matte": "modern_black",
+        "display": False}).json()
+    assert a["images"][0]["matte"] == "shadowbox_polar" and b["images"][0]["matte"] == "modern_black"
+
+
+def test_set_matte_with_passepartout_flag(env, links):
+    links["https://files.example/a"] = make_jpeg(fmt="PNG")
+    img = env["external"].post("/api/images/import", headers=auth(env), json={
+        "openaiFileIdRefs": [ref("https://files.example/a")]}).json()["images"][0]
+    r = env["external"].post(f"/api/images/{img['id']}/matte", headers=auth(env), json={"passepartout": True}).json()
+    assert r["matte"] == "modernthin_warm"
+    r = env["external"].post(f"/api/images/{img['id']}/matte", headers=auth(env), json={"passepartout": False}).json()
+    assert r["matte"] == "none"
+    assert env["external"].post(f"/api/images/{img['id']}/matte", headers=auth(env), json={}).status_code == 422
+
+
+def test_gpt_schema_offers_passepartout(env):
+    spec = env["external"].get("/gpt/openapi.json").json()
+    imp = spec["paths"]["/api/images/import"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    assert imp["properties"]["passepartout"]["type"] == "boolean"
+    sm = spec["paths"]["/api/images/{image_id}/matte"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    assert "passepartout" in sm["properties"]

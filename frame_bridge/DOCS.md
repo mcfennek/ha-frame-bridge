@@ -29,6 +29,8 @@ Der Fernseher muss dabei eingeschaltet oder im Art Mode sein und im selben Netz 
 | `max_upload_mb` | maximale Dateigröße beim Upload |
 | `matte` | Standard-Passepartout für neue Uploads, z. B. `none`, `shadowbox_polar`; pro Bild in der Galerie änderbar |
 | `log_level` | `debug`, `info`, `warning`, `error` |
+| `public_url` | öffentliche https-Adresse der API, z. B. `https://frame.fenner.berlin` (für das ChatGPT-Schema) |
+| `ai_matte` | Passepartout, wenn ChatGPT „mit Passepartout“ wählt (Standard `modernthin_warm`) |
 
 ## Daten und Sicherung
 
@@ -39,7 +41,15 @@ Löschen in der Galerie entfernt nur die lokale Kopie. Ein Bild auf dem Fernsehe
 
 ## Passepartout
 
-Pro Bild über den Rahmen-Knopf ▣ wählbar. Der Frame lässt bei Bildern in voller 4K-Auflösung (3840×2160) kein Passepartout zu. Das Add-on schickt deshalb für Bilder mit Passepartout eine Version in 1920×1080 an den Fernseher und bei „Ohne“ wieder die 4K-Version. Das Original bleibt immer in voller Auflösung gespeichert. Die jeweils vorherige Version auf dem Fernseher bleibt erhalten, bis du ihr Löschen bestätigst.
+Pro Bild über den Rahmen-Knopf ▣ wählbar. Der Frame (Modell 2025) nimmt ein Passepartout nur beim Hochladen an und nicht bei Bildern in voller 4K-Auflösung (3840×2160); nachträgliche Änderungen lehnt er ab. Das Add-on geht deshalb so vor:
+
+1. Liegt auf dem Fernseher schon eine Kopie dieses Bildes mit dem gewünschten Passepartout, wird sie ausgewählt – kein neuer Upload.
+2. Sonst wird versucht, das Passepartout direkt zu ändern.
+3. Erst wenn das nicht geht, wird eine passende Kopie hochgeladen: mit Passepartout in 1920×1080, ohne in 4K.
+
+Das Original bleibt immer in voller Auflösung gespeichert. Die vorherige Kopie bleibt auf dem Fernseher, bis du ihr Löschen bestätigst – behältst du sie, wird sie beim Zurückwechseln wiederverwendet.
+
+Für ChatGPT bedeutet „mit Passepartout“ das Passepartout aus der Option `ai_matte` (Standard `modernthin_warm`, Modern schmal, Warm).
 
 Bilder, die nur auf dem Fernseher liegen und volle 4K-Auflösung haben, können kein Passepartout bekommen – dafür das Bild über das Add-on hochladen.
 

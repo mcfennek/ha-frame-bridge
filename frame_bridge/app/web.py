@@ -90,6 +90,7 @@ class ImportBody(BaseModel):
     mode: str = "fit"
     display: bool = True
     matte: str | None = None
+    passepartout: bool | None = Field(None, description="true: mit Standard-Passepartout (ai_matte), false: ohne")
 
 
 class ImportResult(BaseModel):
@@ -106,14 +107,30 @@ class RandomResult(BaseModel):
     image: Image | None = Field(None, description="Lokales Bild, falls vorhanden")
 
 
-class MatteBody(BaseModel):
-    matte: str = Field(description="none oder <stil>_<farbe>, z. B. shadowbox_polar", examples=["none", "modern_polar"])
+def resolve_matte(matte: str | None, passepartout: bool | None, ai_matte: str, default: str | None) -> str | None:
+    """An explicit matte wins; passepartout=true means the configured AI matte, false means none."""
+    if matte is not None:
+        value = matte
+    elif passepartout is not None:
+        value = ai_matte if passepartout else "none"
+    else:
+        return default
+    try:
+        return valid_matte(value)
+    except FrameError as exc:
+        raise HTTPException(422, str(exc)) from None
 
-    def checked(self) -> str:
-        try:
-            return valid_matte(self.matte)
-        except FrameError as exc:
-            raise HTTPException(422, str(exc)) from None
+
+class MatteBody(BaseModel):
+    matte: str | None = Field(None, description="none oder <stil>_<farbe>, z. B. shadowbox_polar",
+                              examples=["none", "modern_polar"])
+    passepartout: bool | None = Field(None, description="true: Standard-Passepartout für KI (ai_matte), false: ohne")
+
+    def checked(self, ai_matte: str = "modernthin_warm") -> str:
+        value = resolve_matte(self.matte, self.passepartout, ai_matte, None)
+        if value is None:
+            raise HTTPException(422, "matte oder passepartout angeben.")
+        return value
 
 
 class Mattes(BaseModel):
@@ -200,13 +217,9 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
     async def import_images(body: ImportBody, b: Bridge = Depends(bridge)):
         if body.mode not in FIT_MODES:
             raise HTTPException(422, "mode muss 'fit' oder 'crop' sein.")
-        if body.matte is not None:
-            try:
-                valid_matte(body.matte)
-            except FrameError as exc:
-                raise HTTPException(422, str(exc)) from None
+        matte = resolve_matte(body.matte, body.passepartout, b.settings.ai_matte, None)
         res = await b.import_files([r.model_dump() for r in body.openaiFileIdRefs], body.title, body.mode,
-                                   body.display, body.matte)
+                                   body.display, matte)
         if not res["images"]:
             raise HTTPException(422, "Kein Bild übernommen: " + " ".join(res["errors"]))
         res["images"] = [_image_out(i) for i in res["images"]]
@@ -250,7 +263,7 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
     async def image_matte(image_id: str, body: MatteBody, b: Bridge = Depends(bridge)):
         rec = record_or_404(b, image_id)
         try:
-            new, replaced = await b.set_local_matte(rec.id, body.checked())
+            new, replaced = await b.set_local_matte(rec.id, body.checked(b.settings.ai_matte))
         except FrameError as exc:
             raise _frame_http(exc) from None
         out = _image_out(new)
@@ -267,7 +280,7 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
     @r.post("/frame/remote-images/{content_id}/matte", tags=["frame"],
             summary="Passepartout eines Bildes auf dem Fernseher ändern")
     async def remote_matte(content_id: str, body: MatteBody, b: Bridge = Depends(bridge)) -> dict[str, str | None]:
-        matte = body.checked()
+        matte = body.checked(b.settings.ai_matte)
         try:
             valid_content_id(content_id)
             replaced = await b.set_remote_matte(content_id, matte)

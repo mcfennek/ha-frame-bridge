@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "paths": {
     "/health": {
@@ -1031,6 +1031,18 @@
               }
             ],
             "title": "Matte"
+          },
+          "passepartout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passepartout",
+            "description": "true: mit Standard-Passepartout (ai_matte), false: ohne"
           }
         },
         "type": "object",
@@ -1082,19 +1094,35 @@
       "MatteBody": {
         "properties": {
           "matte": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Matte",
             "description": "none oder <stil>_<farbe>, z. B. shadowbox_polar",
             "examples": [
               "none",
               "modern_polar"
             ]
+          },
+          "passepartout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passepartout",
+            "description": "true: Standard-Passepartout für KI (ai_matte), false: ohne"
           }
         },
         "type": "object",
-        "required": [
-          "matte"
-        ],
         "title": "MatteBody"
       },
       "MatteResult": {

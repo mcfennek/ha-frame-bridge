@@ -56,12 +56,22 @@ Du steuerst den Samsung The Frame im Wohnzimmer über die Aktion "The Frame Brid
 - Hat der Nutzer ein Bild hochgeladen und will es zeigen: importImages mit diesem Bild.
 - "Zeig ein anderes / zufälliges Bild": showRandomImage.
 - Gespeicherte Bilder nennen oder eines davon zeigen: listImages, dann showImage.
-- Passepartout: listMattes für die Auswahl, dann setImageMatte, oder matte direkt bei importImages.
-  Hinweis: Mit Passepartout zeigt der Fernseher eine Version in 1920×1080.
+- Passepartout ("mit Rahmen" / "ohne Rahmen"): passepartout=true bzw. false bei importImages,
+  für ein schon gespeichertes Bild setImageMatte mit passepartout=true/false.
+  Sagt der Nutzer nichts dazu, passepartout weglassen.
+  Nur wenn er einen bestimmten Stil oder eine Farbe nennt: listMattes, dann matte angeben.
 - "Was läuft gerade?": getFrameStatus.
 - Antworte kurz auf Deutsch und sag, was auf dem Fernseher passiert ist.
   Meldet die Aktion einen Fehler, gib die Meldung verständlich weiter.
 ```
+
+## Passepartout
+
+„Mit Rahmen“ verwendet das Passepartout aus der Add-on-Option `ai_matte` – Standard **Modern schmal, Warm** (`modernthin_warm`).
+
+## Schema aktualisieren
+
+Nach einem Add-on-Update mit geänderten Aktionen im GPT unter **Aktionen** das Schema erneut **von URL importieren** und den GPT speichern.
 
 ## Sicherheit
 

@@ -20,5 +20,8 @@ configuration:
   public_url:
     name: Öffentliche Adresse der API
     description: HTTPS-Adresse, unter der die API von außen erreichbar ist, z. B. https://frame.fenner.berlin. Wird im Schema für ChatGPT eingetragen.
+  ai_matte:
+    name: Passepartout für KI-Assistenten
+    description: Wird verwendet, wenn ChatGPT „mit Passepartout“ wählt. Standard: modernthin_warm (Modern schmal, Warm).
 network:
   8080/tcp: Externe REST-API (nur mit api_enabled)

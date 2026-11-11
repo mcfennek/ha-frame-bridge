@@ -247,8 +247,8 @@ async function applyMatte(btn, url, matte, doneText) {
       const del = await confirmDialog(
         (matte === "none"
           ? "Die Version in voller Auflösung wurde neu auf den Fernseher geladen. "
-          : "Der Fernseher erlaubt bei Bildern in voller 4K-Auflösung kein Passepartout. Deshalb wurde eine Version in 1920×1080 mit Passepartout hochgeladen. ")
-        + `Die bisherige Version (${old}) liegt noch auf dem Fernseher. Soll sie dort gelöscht werden?`,
+          : "Der Fernseher lässt das Passepartout nicht nachträglich ändern. Deshalb wurde eine neue Version mit diesem Passepartout hochgeladen. ")
+        + `Die bisherige Version (${old}) liegt noch auf dem Fernseher. Behältst du sie, wird sie beim Zurückwechseln wiederverwendet statt neu hochgeladen. Soll sie gelöscht werden?`,
         "Vom Fernseher löschen", "Behalten");
       if (del) {
         await api(`api/frame/remote-images/${encodeURIComponent(old)}?confirm=true`, { method: "DELETE" });

@@ -263,9 +263,64 @@ def test_matte_on_4k_copy_uploads_fitting_copy_and_keeps_old(env):
     assert r["replaced_tv_content_id"] is None and r["tv_content_id"] == new
     assert frame.matte_of[new] == "shadowbox_black"
 
-    # back to none: the 4K copy goes up again
+    # back to none: the 4K copy still on the TV is reused, nothing uploaded
+    uploads = frame.uploads
     r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "none"}).json()
-    assert r["replaced_tv_content_id"] == new and frame.width_of[r["tv_content_id"]] == 3840
+    assert r["replaced_tv_content_id"] is None and r["tv_content_id"] == old
+    assert frame.uploads == uploads and frame.current == old
+
+
+def test_tv_refusing_every_change_reuses_copies(env):
+    """The user's case: the 2025 Frame refuses change_matte even on 1920x1080 copies."""
+    c, frame = env["ingress"], env["frame"]
+    frame.refuse_all_changes = True
+    img = upload(c, display="true", matte="modernthin_warm").json()
+    warm = img["tv_content_id"]
+    assert frame.uploads == 1 and frame.width_of[warm] == 1920
+
+    # A -> B: unavoidable new copy, old one offered for deletion
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernwide_polar"}).json()
+    polar = r["tv_content_id"]
+    assert r["replaced_tv_content_id"] == warm and frame.uploads == 2 and frame.current == polar
+
+    # B -> A (user kept the old copy): reused, no upload
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernthin_warm"}).json()
+    assert r["tv_content_id"] == warm and r["replaced_tv_content_id"] is None
+    assert frame.uploads == 2 and frame.current == warm
+
+    # same change via the TV tab on the reduced copy
+    r = c.post(f"/api/frame/remote-images/{warm}/matte", json={"matte": "modernwide_polar"}).json()
+    assert r["replaced_tv_content_id"] is None and frame.uploads == 2 and frame.current == polar
+
+    # same matte again: nothing happens
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernwide_polar"}).json()
+    assert frame.uploads == 2 and r["replaced_tv_content_id"] is None
+
+    # TV tab knows older copies belong to the gallery picture
+    tv = c.get("/api/frame/remote-images").json()["images"]
+    assert {i["local_title"] for i in tv} == {img["title"]}
+
+
+def test_deleted_copy_is_not_reused(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.refuse_all_changes = True
+    img = upload(c, display="true", matte="modernthin_warm").json()
+    warm = img["tv_content_id"]
+    c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernwide_polar"})
+    assert c.delete(f"/api/frame/remote-images/{warm}?confirm=true").status_code == 204
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernthin_warm"}).json()
+    assert r["tv_content_id"] != warm and frame.uploads == 3
+
+
+def test_copy_deleted_outside_is_forgotten(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.refuse_all_changes = True
+    img = upload(c, display="true", matte="modernthin_warm").json()
+    warm = img["tv_content_id"]
+    c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernwide_polar"})
+    frame.images.pop(warm)  # deleted on the TV with the remote
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modernthin_warm"}).json()
+    assert r["tv_content_id"] != warm and frame.width_of[r["tv_content_id"]] == 1920
 
 
 def test_matte_for_image_not_on_tv_is_remembered(env):

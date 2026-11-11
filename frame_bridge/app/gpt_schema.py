@@ -70,8 +70,10 @@ def gpt_schema(server_url: str) -> dict[str, Any]:
                             "mode": {"type": "string", "enum": ["fit", "crop"],
                                      "description": "fit: ganzes Bild sichtbar (Standard). crop: füllt den Bildschirm, Ränder werden abgeschnitten."},
                             "display": {"type": "boolean", "description": "Sofort auf dem Fernseher anzeigen. Standard: true."},
+                            "passepartout": {"type": "boolean",
+                                             "description": "true: mit Passepartout (Standard-Rahmen des Nutzers), false: ohne. Weglassen, wenn der Nutzer nichts dazu sagt."},
                             "matte": {"type": "string",
-                                      "description": "Passepartout: 'none' (Standard) oder <stil>_<farbe>, z. B. 'modern_polar'. Werte aus listMattes."},
+                                      "description": "Nur wenn der Nutzer einen bestimmten Stil/Farbe will: <stil>_<farbe>, z. B. 'modern_polar' (Werte aus listMattes). Hat Vorrang vor passepartout."},
                         },
                     }}}},
                     "responses": _ok("Gespeicherte Bilder, ob angezeigt, und Fehler je Datei"),
@@ -108,12 +110,16 @@ def gpt_schema(server_url: str) -> dict[str, Any]:
                 "post": {
                     "operationId": "setImageMatte",
                     "summary": "Passepartout eines Bildes ändern",
-                    "description": "Setzt das Passepartout eines gespeicherten Bildes; 'none' entfernt es.",
+                    "description": ("Passepartout eines gespeicherten Bildes ändern: passepartout=true (Standard-Rahmen) "
+                                    "oder false (ohne); für einen bestimmten Stil matte angeben."),
                     "x-openai-isConsequential": False,
                     "parameters": [image_id],
                     "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                        "type": "object", "required": ["matte"],
-                        "properties": {"matte": {"type": "string", "description": "'none' oder z. B. 'shadowbox_polar'"}},
+                        "type": "object",
+                        "properties": {
+                            "passepartout": {"type": "boolean", "description": "true: mit Standard-Rahmen, false: ohne"},
+                            "matte": {"type": "string", "description": "Optional, bestimmter Stil, z. B. 'shadowbox_polar'"},
+                        },
                     }}}},
                     "responses": _ok("Bild mit neuem Passepartout"),
                 }
