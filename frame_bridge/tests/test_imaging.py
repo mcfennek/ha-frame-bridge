@@ -42,3 +42,14 @@ def test_thumb_small():
 def test_rejects(data):
     with pytest.raises(ImageError):
         prepare(data, "fit")
+
+
+def test_iphone_mpo_jpeg_is_accepted():
+    main = Image.new("RGB", (1600, 1200), (20, 90, 200))
+    extra = Image.new("RGB", (400, 300), (0, 0, 0))
+    buf = io.BytesIO()
+    main.save(buf, "MPO", save_all=True, append_images=[extra])
+    assert Image.open(io.BytesIO(buf.getvalue())).format == "MPO"
+    p = prepare(buf.getvalue(), "crop")
+    assert (p.source_width, p.source_height) == (1600, 1200)
+    assert px(p.jpeg, (1920, 1080))[2] > 150  # the main frame, not the black extra one

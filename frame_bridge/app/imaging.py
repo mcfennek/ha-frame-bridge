@@ -9,7 +9,8 @@ from PIL import Image, ImageFilter, ImageOps
 TARGET_SIZE = (3840, 2160)
 THUMB_WIDTH = 640
 MAX_SOURCE_PIXELS = 80_000_000  # about 10000x8000; larger files are refused
-ALLOWED_FORMATS = {"JPEG", "PNG"}
+# MPO: JPEG with extra frames (iPhone HDR gain map, depth, camera stereo); we use the main frame
+ALLOWED_FORMATS = {"JPEG", "PNG", "MPO"}
 FIT_MODES = ("fit", "crop")
 
 Image.MAX_IMAGE_PIXELS = MAX_SOURCE_PIXELS
@@ -41,6 +42,8 @@ def _open(data: bytes) -> Image.Image:
     if fmt not in ALLOWED_FORMATS:
         raise ImageError(f"Format {fmt} wird nicht unterstützt, bitte JPG oder PNG verwenden.")
     img = Image.open(io.BytesIO(data))
+    if getattr(img, "n_frames", 1) > 1:
+        img.seek(0)  # main image of an MPO
     img.load()
     img = ImageOps.exif_transpose(img)
     if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
