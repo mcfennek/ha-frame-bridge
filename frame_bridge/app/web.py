@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -342,9 +342,21 @@ def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool 
 
     app.include_router(settings_router)
 
+    # The version in the asset URLs makes the browser fetch new files after every add-on update.
+    index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    for asset in ("static/app.js", "static/style.css"):
+        index_html = index_html.replace(f'"{asset}"', f'"{asset}?v={__version__}"')
+
     @app.get("/", include_in_schema=False)
     async def index():
-        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(index_html, headers={"Cache-Control": "no-cache, no-store"})
+
+    @app.middleware("http")
+    async def static_revalidate(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

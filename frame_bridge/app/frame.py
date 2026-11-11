@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 CLIENT_NAME = "FrameBridge"
 PORT = 8002
 MY_PHOTOS_CATEGORY = "MY-C0002"
+OWN_PHOTO_PREFIX = "MY_"  # own uploads are MY_F…, Art Store pieces SAM-…
 CONTENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MATTE_RE = re.compile(r"^(none|[a-z0-9]{1,32}_[a-z0-9]{1,32})$")
 
@@ -179,11 +180,13 @@ class SamsungFrame:
 
     async def list_remote(self) -> list[dict[str, Any]]:
         async def _do(art):
-            items = await art.available(MY_PHOTOS_CATEGORY, timeout=15)
+            # The 2025 Frame does not always report own photos under MY-C0002, so fetch everything
+            # and recognise own photos by their id.
+            items = await art.available(None, timeout=15)
             out = []
             for item in items or []:
                 cid = item.get("content_id")
-                if not cid or not CONTENT_ID_RE.match(cid):
+                if not cid or not CONTENT_ID_RE.match(cid) or not cid.startswith(OWN_PHOTO_PREFIX):
                     continue
                 out.append(
                     {
@@ -192,7 +195,7 @@ class SamsungFrame:
                         "width": _int(item.get("width")),
                         "height": _int(item.get("height")),
                         "image_date": item.get("image_date"),
-                        "matte_id": item.get("matte_id"),
+                        "matte_id": (item.get("matte_id") or "none").lower(),
                     }
                 )
             return out

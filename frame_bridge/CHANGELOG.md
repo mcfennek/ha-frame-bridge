@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Nach einem Update lädt die Oberfläche immer die neuen Programmdateien (vorher konnte der Browser die alte Version weiterverwenden – der Passepartout-Knopf reagierte dann nicht).
+- Eigene Bilder auf dem Fernseher werden an ihrer Kennung (MY_…) erkannt statt an der Kategorie, die der 2025er Frame nicht immer gleich meldet.
+
 ## 0.2.0
 
 - Passepartout pro Bild wählbar (Stil und Farbe aus der Liste des Fernsehers, oder „Ohne“) – für gespeicherte Bilder, für Bilder, die nur auf dem Fernseher liegen, und schon beim Upload.

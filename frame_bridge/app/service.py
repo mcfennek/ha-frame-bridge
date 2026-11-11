@@ -124,10 +124,12 @@ class Bridge:
 
     async def _apply_matte_on_tv(self, content_id: str, matte: str) -> None:
         """change_matte gives no reply on failure, so read the TV's list back to be sure."""
+        _LOGGER.info("Passepartout %s für %s", matte, content_id)
         await self.frame.change_matte(content_id, matte)
         for item in await self.frame.list_remote():
             if item["content_id"] == content_id:
                 if (item.get("matte_id") or "none") != matte:
+                    _LOGGER.warning("TV kept matte %s for %s instead of %s", item.get("matte_id"), content_id, matte)
                     raise FrameError(
                         "Der Fernseher hat dieses Passepartout für das Bild nicht übernommen. "
                         "Manche Passepartouts lässt er nur bei bestimmten Bildgrößen zu – bitte ein anderes wählen."

@@ -299,3 +299,10 @@ def test_old_database_is_migrated(tmp_path):
     (tmp_path / "i").mkdir(); (tmp_path / "t").mkdir()
     store = ImageStore(db, tmp_path / "i", tmp_path / "t")
     assert store.get("a" * 32).matte == "none"
+
+
+def test_assets_are_versioned_and_revalidated(env):
+    from app import __version__
+    html = env["ingress"].get("/")
+    assert f"static/app.js?v={__version__}" in html.text and "no-store" in html.headers["cache-control"]
+    assert env["ingress"].get(f"/static/app.js?v={__version__}").headers["cache-control"] == "no-cache"
