@@ -9,13 +9,20 @@ from typing import Any
 
 from . import imaging
 from .config import Settings
-from .frame import FrameBackend, FrameError, valid_matte
+from .frame import FrameBackend, FrameError, MatteRefused, valid_matte
 from .ha import HomeAssistant
 from .storage import ImageRecord, ImageStore
 
 _LOGGER = logging.getLogger(__name__)
 
 MAX_TITLE = 120
+
+FULL, MATTE = "full", "matte"
+
+
+def variant_for(matte: str) -> str:
+    return FULL if (matte or "none") == "none" else MATTE
+
 
 
 def clean_title(title: str | None, fallback: str) -> str:
@@ -71,7 +78,7 @@ class Bridge:
         record = self.store.get(image_id)
         if record is None:
             raise KeyError(image_id)
-        content_id = record.tv_content_id
+        content_id = record.tv_content_id if record.tv_variant == variant_for(record.matte) else None
         if content_id:
             try:
                 await self.frame.select(content_id)
@@ -79,13 +86,21 @@ class Bridge:
                 _LOGGER.info("content %s not selectable any more, uploading again", content_id)
                 content_id = None
         if not content_id:
-            jpeg = self.store.image_path(image_id).read_bytes()
-            content_id = await self.frame.upload(jpeg, matte=record.matte)
-            self.store.set_tv_content_id(image_id, content_id)
+            content_id = await self._upload_variant(record)
             await self.frame.select(content_id)
         if art_mode:
             await self.frame.set_artmode(True)
         return self.store.get(image_id) or record
+
+    async def _upload_variant(self, record: ImageRecord) -> str:
+        """4K without matte; 1920x1080 with matte, because the TV refuses mattes on 4K pictures."""
+        jpeg = self.store.image_path(record.id).read_bytes()
+        variant = variant_for(record.matte)
+        if variant == MATTE:
+            jpeg = await asyncio.to_thread(imaging.reduce_for_matte, jpeg)
+        content_id = await self.frame.upload(jpeg, matte=record.matte)
+        self.store.set_tv_content_id(record.id, content_id, variant)
+        return content_id
 
     async def display_random(self) -> dict[str, Any]:
         """Picks from the user's own pictures on the TV and in the local gallery, never the one
@@ -130,35 +145,72 @@ class Bridge:
             if item["content_id"] == content_id:
                 if (item.get("matte_id") or "none") != matte:
                     _LOGGER.warning("TV kept matte %s for %s instead of %s", item.get("matte_id"), content_id, matte)
-                    raise FrameError(
-                        "Der Fernseher hat dieses Passepartout für das Bild nicht übernommen. "
-                        "Manche Passepartouts lässt er nur bei bestimmten Bildgrößen zu – bitte ein anderes wählen."
-                    )
+                    raise MatteRefused("Der Fernseher hat dieses Passepartout für das Bild nicht übernommen.")
                 return
         raise FrameError("Das Bild ist nicht mehr auf dem Fernseher.")
 
-    async def set_local_matte(self, image_id: str, matte: str) -> ImageRecord:
-        """Remembered for the next upload; changed on the TV right away if the picture is there."""
+    async def set_local_matte(self, image_id: str, matte: str) -> tuple[ImageRecord, str | None]:
+        """Sets the matte of a gallery picture. If its copy on the TV cannot take the matte (4K) or
+        is the reduced copy and the matte is removed, the fitting copy is uploaded instead.
+        Returns the record and the content id of the copy that was replaced on the TV, if any;
+        that copy is left on the TV – deleting it is the user's decision."""
         valid_matte(matte)
         record = self.store.get(image_id)
         if record is None:
             raise KeyError(image_id)
-        if record.tv_content_id:
+        old_cid = record.tv_content_id
+        on_tv = False
+        if old_cid:
             try:
-                remote = {i["content_id"] for i in await self.frame.list_remote()}
+                on_tv = old_cid in {i["content_id"] for i in await self.frame.list_remote()}
             except FrameError:
-                remote = set()
-            if record.tv_content_id in remote:
-                await self._apply_matte_on_tv(record.tv_content_id, matte)
+                on_tv = False
+        if on_tv and record.tv_variant == variant_for(matte):
+            try:
+                await self._apply_matte_on_tv(old_cid, matte)
+                self.store.set_matte(image_id, matte)
+                return self.store.get(image_id) or record, None
+            except MatteRefused:
+                _LOGGER.info("TV refused matte %s on %s, uploading a fitting copy", matte, old_cid)
         self.store.set_matte(image_id, matte)
-        return self.store.get(image_id) or record
+        record = self.store.get(image_id) or record
+        if not on_tv:
+            return record, None
+        showing = False
+        try:
+            showing = ((await self.frame.status()).get("current") or {}).get("content_id") == old_cid
+        except FrameError:
+            pass
+        new_cid = await self._upload_variant(record)
+        if showing:
+            await self.frame.select(new_cid)
+        return self.store.get(image_id) or record, old_cid
 
-    async def set_remote_matte(self, content_id: str, matte: str) -> None:
+    async def set_remote_matte(self, content_id: str, matte: str) -> str | None:
+        """Returns the content id of a replaced copy (see set_local_matte), else None."""
         valid_matte(matte)
-        await self._apply_matte_on_tv(content_id, matte)
+        local = self.store.find_by_tv_content_id(content_id)
+        if local:  # from our gallery: we have the original and can upload a fitting copy
+            return (await self.set_local_matte(local.id, matte))[1]
+        try:
+            await self._apply_matte_on_tv(content_id, matte)
+        except MatteRefused:
+            raise MatteRefused(
+                "Der Fernseher lässt bei diesem Bild kein Passepartout zu – bei Bildern in voller "
+                "4K-Auflösung ist das so. Lade das Bild über The Frame Bridge hoch; dann wird für das "
+                "Passepartout automatisch eine passende Version erstellt."
+            ) from None
+        return None
+
+    async def delete_remote(self, content_id: str) -> None:
+        """Deletes a picture on the TV. Only reachable from the web UI after explicit confirmation."""
+        if not content_id.startswith("MY_"):
+            raise FrameError("Nur eigene Bilder können gelöscht werden, keine Werke aus dem Art Store.")
+        await self.frame.delete_remote(content_id)
         local = self.store.find_by_tv_content_id(content_id)
         if local:
-            self.store.set_matte(local.id, matte)
+            self.store.set_tv_content_id(local.id, None, FULL)
+        (self.settings.tv_thumbs_dir / f"{content_id}.jpg").unlink(missing_ok=True)
 
     async def remote_images(self) -> dict[str, Any]:
         """Only what the TV really reports; never invented entries."""

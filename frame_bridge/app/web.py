@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import INGRESS_PROXY_IP
-from .frame import FrameError, valid_content_id, valid_matte
+from .frame import FrameError, MatteRefused, valid_content_id, valid_matte
 from .imaging import FIT_MODES, ImageError
 from .service import Bridge
 from .storage import InvalidImageId
@@ -69,6 +69,12 @@ class RemoteImages(BaseModel):
     images: list[RemoteImage]
 
 
+class MatteResult(Image):
+    replaced_tv_content_id: str | None = Field(
+        None, description="Frühere Kopie auf dem Fernseher, die durch eine passende Version ersetzt wurde; "
+                          "sie bleibt dort, bis sie ausdrücklich gelöscht wird")
+
+
 class RandomResult(BaseModel):
     source: str = Field(description="tv = Bild lag schon auf dem Fernseher, local = aus der Galerie")
     content_id: str | None = Field(None, description="ID des jetzt angezeigten Bildes auf dem Fernseher")
@@ -108,7 +114,8 @@ def _image_out(record) -> dict[str, Any]:
 
 
 def _frame_http(exc: FrameError) -> HTTPException:
-    return HTTPException(status_code=502, detail=str(exc))
+    # 409: the TV is fine but refuses this particular change
+    return HTTPException(status_code=409 if isinstance(exc, MatteRefused) else 502, detail=str(exc))
 
 
 def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], int]) -> APIRouter:
@@ -197,14 +204,17 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
         except FrameError as exc:
             raise _frame_http(exc) from None
 
-    @r.post("/images/{image_id}/matte", tags=["images"], response_model=Image,
+    @r.post("/images/{image_id}/matte", tags=["images"], response_model=MatteResult,
             summary="Passepartout eines Bildes festlegen (auf dem Fernseher sofort, sonst beim nächsten Upload)")
     async def image_matte(image_id: str, body: MatteBody, b: Bridge = Depends(bridge)):
         rec = record_or_404(b, image_id)
         try:
-            return _image_out(await b.set_local_matte(rec.id, body.checked()))
+            new, replaced = await b.set_local_matte(rec.id, body.checked())
         except FrameError as exc:
             raise _frame_http(exc) from None
+        out = _image_out(new)
+        out["replaced_tv_content_id"] = replaced
+        return out
 
     @r.get("/frame/mattes", tags=["frame"], response_model=Mattes, summary="Passepartouts, die der Fernseher anbietet")
     async def mattes(b: Bridge = Depends(bridge)):
@@ -215,14 +225,14 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
 
     @r.post("/frame/remote-images/{content_id}/matte", tags=["frame"],
             summary="Passepartout eines Bildes auf dem Fernseher ändern")
-    async def remote_matte(content_id: str, body: MatteBody, b: Bridge = Depends(bridge)) -> dict[str, str]:
+    async def remote_matte(content_id: str, body: MatteBody, b: Bridge = Depends(bridge)) -> dict[str, str | None]:
+        matte = body.checked()
         try:
-            matte = body.checked()
             valid_content_id(content_id)
-            await b.set_remote_matte(content_id, matte)
+            replaced = await b.set_remote_matte(content_id, matte)
         except FrameError as exc:
             raise _frame_http(exc) from None
-        return {"content_id": content_id, "matte": body.matte}
+        return {"content_id": content_id, "matte": matte, "replaced_tv_content_id": replaced}
 
     @r.post("/frame/random", tags=["frame"], response_model=RandomResult,
             summary="Zufälliges eigenes Bild anzeigen (Fernseher und Galerie, nie das aktuelle)")
@@ -341,6 +351,23 @@ def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool 
         return {"token": get_bridge().settings.rotate_api_token()}
 
     app.include_router(settings_router)
+
+    # Deleting on the TV exists only in the web UI (never in the external API) and needs confirm=true,
+    # which the UI sends only after the user confirmed a dialog naming the picture.
+    tv_router = APIRouter(prefix="/api/frame")
+
+    @tv_router.delete("/remote-images/{content_id}", status_code=204)
+    async def delete_remote(content_id: str, confirm: bool = False):
+        if not confirm:
+            raise HTTPException(400, "Löschen auf dem Fernseher braucht eine ausdrückliche Bestätigung.")
+        try:
+            valid_content_id(content_id)
+            await get_bridge().delete_remote(content_id)
+        except FrameError as exc:
+            raise _frame_http(exc) from None
+        return Response(status_code=204)
+
+    app.include_router(tv_router)
 
     # Script and styles are inlined into the page, so a browser can never combine a new page with
     # an old cached script after an add-on update.

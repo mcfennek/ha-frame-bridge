@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from PIL import Image, ImageFilter, ImageOps
 
 TARGET_SIZE = (3840, 2160)
+# The Frame refuses mattes for full-screen 4K pictures, so pictures with a matte go up in this size.
+MATTE_SIZE = (1920, 1080)
 THUMB_WIDTH = 640
 MAX_SOURCE_PIXELS = 80_000_000  # about 10000x8000; larger files are refused
 # MPO: JPEG with extra frames (iPhone HDR gain map, depth, camera stereo); we use the main frame
@@ -86,3 +88,12 @@ def prepare(data: bytes, mode: str = "fit") -> PreparedImage:
     tbuf = io.BytesIO()
     thumb.save(tbuf, "JPEG", quality=82)
     return PreparedImage(buf.getvalue(), tbuf.getvalue(), out.width, out.height, sw, sh)
+
+
+def reduce_for_matte(jpeg: bytes) -> bytes:
+    """Smaller copy of a prepared 3840x2160 picture, for showing it with a matte."""
+    img = Image.open(io.BytesIO(jpeg)).convert("RGB")
+    img = img.resize(MATTE_SIZE, Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=94, optimize=True, subsampling=0)
+    return buf.getvalue()

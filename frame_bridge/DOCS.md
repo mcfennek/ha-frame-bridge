@@ -35,7 +35,13 @@ Der Fernseher muss dabei eingeschaltet oder im Art Mode sein und im selben Netz 
 Alles liegt im Add-on-Datenverzeichnis und ist Teil der Home-Assistant-Sicherungen:
 Bilder (3840×2160 JPEG), Vorschaubilder, Datenbank, Fernseher-Token und API-Token.
 
-Löschen in der Galerie entfernt nur die lokale Kopie. **Bilder auf dem Fernseher werden vom Add-on nie gelöscht.**
+Löschen in der Galerie entfernt nur die lokale Kopie. Ein Bild auf dem Fernseher wird nur gelöscht, wenn du das in der Weboberfläche ausdrücklich bestätigst – die externe API kann keine Bilder auf dem Fernseher löschen.
+
+## Passepartout
+
+Pro Bild über den Rahmen-Knopf ▣ wählbar. Der Frame lässt bei Bildern in voller 4K-Auflösung (3840×2160) kein Passepartout zu. Das Add-on schickt deshalb für Bilder mit Passepartout eine Version in 1920×1080 an den Fernseher und bei „Ohne“ wieder die 4K-Version. Das Original bleibt immer in voller Auflösung gespeichert. Die jeweils vorherige Version auf dem Fernseher bleibt erhalten, bis du ihr Löschen bestätigst.
+
+Bilder, die nur auf dem Fernseher liegen und volle 4K-Auflösung haben, können kein Passepartout bekommen – dafür das Bild über das Add-on hochladen.
 
 ## Externe REST-API
 

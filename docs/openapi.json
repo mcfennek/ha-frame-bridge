@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.2.2"
+    "version": "0.3.0"
   },
   "paths": {
     "/health": {
@@ -380,7 +380,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Image"
+                  "$ref": "#/components/schemas/MatteResult"
                 }
               }
             }
@@ -465,7 +465,14 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "title": "Response Remote Matte Api Frame Remote Images  Content Id  Matte Post"
                 }
@@ -882,6 +889,107 @@
           "matte"
         ],
         "title": "MatteBody"
+      },
+      "MatteResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Lokale Bild-ID (32 Hex-Zeichen)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "description": "Upload-Zeitpunkt, ISO 8601 UTC"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "source_width": {
+            "type": "integer",
+            "title": "Source Width"
+          },
+          "source_height": {
+            "type": "integer",
+            "title": "Source Height"
+          },
+          "fit_mode": {
+            "type": "string",
+            "title": "Fit Mode",
+            "description": "fit = Einpassen, crop = Zuschneiden"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "tv_content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Content Id",
+            "description": "ID auf dem Fernseher, sobald einmal übertragen"
+          },
+          "matte": {
+            "type": "string",
+            "title": "Matte",
+            "description": "Passepartout, z. B. none oder shadowbox_polar",
+            "default": "none"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "title": "Thumbnail Url"
+          },
+          "replaced_tv_content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced Tv Content Id",
+            "description": "Frühere Kopie auf dem Fernseher, die durch eine passende Version ersetzt wurde; sie bleibt dort, bis sie ausdrücklich gelöscht wird"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "width",
+          "height",
+          "source_width",
+          "source_height",
+          "fit_mode",
+          "original_name",
+          "size_bytes",
+          "file_url",
+          "thumbnail_url"
+        ],
+        "title": "MatteResult"
       },
       "Mattes": {
         "properties": {

@@ -27,11 +27,12 @@ function toast(text, bad = false) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.className = "toast"), bad ? 6000 : 3000);
 }
-function confirmDialog(text, okLabel = "Löschen") {
+function confirmDialog(text, okLabel = "Löschen", cancelLabel = "Abbrechen") {
   return new Promise((resolve) => {
     const d = $("confirm");
     $("confirm-text").textContent = text;
     $("confirm-ok").textContent = okLabel;
+    $("confirm-cancel").textContent = cancelLabel;
     d.addEventListener("close", () => resolve(d.returnValue === "ok"), { once: true });
     d.showModal();
   });
@@ -236,8 +237,26 @@ function markOnTv() {
 async function applyMatte(btn, url, matte, doneText) {
   btn.disabled = true;
   try {
-    await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ matte }) });
-    toast(`${matteLabel(matte)}: ${doneText}`);
+    const res = await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ matte }) });
+    const old = res?.replaced_tv_content_id;
+    if (old) {
+      toast(matte === "none"
+        ? "Ohne Passepartout: die Version in voller Auflösung ist jetzt auf dem Fernseher"
+        : `${matteLabel(matte)}: passende Version auf dem Fernseher`);
+      await refreshAll();
+      const del = await confirmDialog(
+        (matte === "none"
+          ? "Die Version in voller Auflösung wurde neu auf den Fernseher geladen. "
+          : "Der Fernseher erlaubt bei Bildern in voller 4K-Auflösung kein Passepartout. Deshalb wurde eine Version in 1920×1080 mit Passepartout hochgeladen. ")
+        + `Die bisherige Version (${old}) liegt noch auf dem Fernseher. Soll sie dort gelöscht werden?`,
+        "Vom Fernseher löschen", "Behalten");
+      if (del) {
+        await api(`api/frame/remote-images/${encodeURIComponent(old)}?confirm=true`, { method: "DELETE" });
+        toast(`${old} vom Fernseher gelöscht`);
+      }
+    } else {
+      toast(`${matteLabel(matte)}: ${doneText}`);
+    }
     await loadImages();
     if (state.tab === "tv") await loadTv();
   } catch (e) { toast(e.message, true); }

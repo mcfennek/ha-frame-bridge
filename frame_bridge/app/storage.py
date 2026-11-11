@@ -30,6 +30,7 @@ class ImageRecord:
     size_bytes: int
     tv_content_id: str | None = None
     matte: str = "none"
+    tv_variant: str = "full"  # which copy is on the TV: full (4K, no matte) or matte (1920x1080)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -62,12 +63,15 @@ class ImageStore:
                 original_name TEXT NOT NULL,
                 size_bytes INTEGER NOT NULL,
                 tv_content_id TEXT,
-                matte TEXT NOT NULL DEFAULT 'none'
+                matte TEXT NOT NULL DEFAULT 'none',
+                tv_variant TEXT NOT NULL DEFAULT 'full'
             )"""
         )
         cols = {r[1] for r in self._db.execute("PRAGMA table_info(images)")}
         if "matte" not in cols:  # databases from 0.1.x
             self._db.execute("ALTER TABLE images ADD COLUMN matte TEXT NOT NULL DEFAULT 'none'")
+        if "tv_variant" not in cols:  # databases up to 0.2.2
+            self._db.execute("ALTER TABLE images ADD COLUMN tv_variant TEXT NOT NULL DEFAULT 'full'")
         self._db.commit()
 
     @staticmethod
@@ -87,7 +91,7 @@ class ImageStore:
         with self._lock:
             self._db.execute(
                 "INSERT INTO images VALUES (:id,:title,:created_at,:width,:height,:source_width,"
-                ":source_height,:fit_mode,:original_name,:size_bytes,:tv_content_id,:matte)",
+                ":source_height,:fit_mode,:original_name,:size_bytes,:tv_content_id,:matte,:tv_variant)",
                 record.to_dict(),
             )
             self._db.commit()
@@ -108,10 +112,11 @@ class ImageStore:
         with self._lock:
             return self._db.execute("SELECT COUNT(*) FROM images").fetchone()[0]
 
-    def set_tv_content_id(self, image_id: str, content_id: str | None) -> None:
+    def set_tv_content_id(self, image_id: str, content_id: str | None, variant: str = "full") -> None:
         validate_id(image_id)
         with self._lock:
-            self._db.execute("UPDATE images SET tv_content_id=? WHERE id=?", (content_id, image_id))
+            self._db.execute("UPDATE images SET tv_content_id=?, tv_variant=? WHERE id=?",
+                             (content_id, variant, image_id))
             self._db.commit()
 
     def set_matte(self, image_id: str, matte: str) -> None:

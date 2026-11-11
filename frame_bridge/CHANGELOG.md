@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Passepartout auch für Bilder in voller 4K-Auflösung: Der Frame lehnt dort Passepartouts ab (Fehler −7). Das Add-on lädt dann automatisch eine Version in 1920×1080 mit Passepartout hoch; bei „Ohne“ kommt wieder die 4K-Version. Das Original bleibt in voller Auflösung gespeichert.
+- Die vorherige Version bleibt auf dem Fernseher, bis du ihr Löschen ausdrücklich bestätigst (nur in der Weboberfläche, nie über die externe API, nur eigene Bilder).
+- Verständliche Meldung bei 4K-Bildern, die nur auf dem Fernseher liegen.
+
 ## 0.2.2
 
 - Bilder auf dem Fernseher werden nicht mehr doppelt angezeigt (der Fernseher führt jedes eigene Bild in zwei Kategorien).

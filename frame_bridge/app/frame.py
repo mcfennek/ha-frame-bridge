@@ -30,6 +30,10 @@ class FrameNotConfigured(FrameError):
     pass
 
 
+class MatteRefused(FrameError):
+    """The TV rejected a matte for this picture (error -7, seen for full 3840x2160 pictures)."""
+
+
 def valid_content_id(content_id: str) -> str:
     if not isinstance(content_id, str) or not CONTENT_ID_RE.match(content_id):
         raise FrameError("Ungültige Bild-ID des Fernsehers.")
@@ -57,6 +61,7 @@ class FrameBackend(Protocol):
     async def set_artmode(self, on: bool) -> None: ...
     async def mattes(self) -> dict[str, list[str]]: ...
     async def change_matte(self, content_id: str, matte_id: str) -> None: ...
+    async def delete_remote(self, content_id: str) -> None: ...
     async def close(self) -> None: ...
 
 
@@ -259,9 +264,27 @@ class SamsungFrame:
         valid_matte(matte_id)
 
         async def _do(art):
-            await art.change_matte(content_id, matte_id, portrait_matte=matte_id)
+            from samsungframetv import exceptions as tv_exc
+
+            try:
+                await art.change_matte(content_id, matte_id, portrait_matte=matte_id)
+            except tv_exc.ResponseError as exc:
+                if "-7" in str(exc):
+                    raise MatteRefused("Der Fernseher lässt für dieses Bild kein Passepartout zu.") from exc
+                raise
 
         await self._call("Passepartout ändern", _do)
+
+    async def delete_remote(self, content_id: str) -> None:
+        """Only called after the user explicitly confirmed it in the web UI."""
+        valid_content_id(content_id)
+        if not content_id.startswith(OWN_PHOTO_PREFIX):
+            raise FrameError("Nur eigene Bilder können gelöscht werden.")
+
+        async def _do(art):
+            await art.delete_list([content_id])
+
+        await self._call("Löschen auf dem Fernseher", _do)
 
     async def close(self) -> None:
         async with self._lock:

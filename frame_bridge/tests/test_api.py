@@ -1,4 +1,7 @@
+import io
+
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.web import create_ingress_app
 from conftest import make_jpeg
@@ -229,51 +232,101 @@ def test_mattes_list(env):
     assert "shadowbox" in m["types"] and "polar" in m["colors"]
 
 
-def test_upload_with_matte(env):
+def test_upload_with_matte_sends_reduced_copy(env):
     img = upload(env["ingress"], display="true", matte="shadowbox_polar").json()
+    cid = img["tv_content_id"]
     assert img["matte"] == "shadowbox_polar"
-    assert env["frame"].matte_of[img["tv_content_id"]] == "shadowbox_polar"
+    assert env["frame"].matte_of[cid] == "shadowbox_polar"
+    assert env["frame"].width_of[cid] == 1920
+    full = env["ingress"].get(f"/api/images/{img['id']}/file")
+    assert Image.open(io.BytesIO(full.content)).width == 3840  # original kept in 4K
 
 
 def test_upload_rejects_bad_matte(env):
     assert upload(env["ingress"], matte="../etc").status_code == 422
 
 
-def test_change_matte_of_local_image_on_tv(env):
+def test_matte_on_4k_copy_uploads_fitting_copy_and_keeps_old(env):
     c, frame = env["ingress"], env["frame"]
     img = upload(c, display="true").json()
-    assert frame.matte_of[img["tv_content_id"]] == "none"
-    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modern_antique"})
-    assert r.status_code == 200 and r.json()["matte"] == "modern_antique"
-    assert frame.matte_of[img["tv_content_id"]] == "modern_antique"
-    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "none"})
-    assert frame.matte_of[img["tv_content_id"]] == "none"
+    old = img["tv_content_id"]
+    assert frame.width_of[old] == 3840
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modern_antique"}).json()
+    new = r["tv_content_id"]
+    assert r["replaced_tv_content_id"] == old and new != old
+    assert frame.width_of[new] == 1920 and frame.matte_of[new] == "modern_antique"
+    assert old in frame.images and frame.deleted == []  # never deleted without confirmation
+    assert frame.current == new  # was showing, so the new copy is shown
+
+    # another matte on the reduced copy: changed in place
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "shadowbox_black"}).json()
+    assert r["replaced_tv_content_id"] is None and r["tv_content_id"] == new
+    assert frame.matte_of[new] == "shadowbox_black"
+
+    # back to none: the 4K copy goes up again
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "none"}).json()
+    assert r["replaced_tv_content_id"] == new and frame.width_of[r["tv_content_id"]] == 3840
 
 
-def test_change_matte_of_local_image_not_on_tv_is_remembered(env):
+def test_matte_for_image_not_on_tv_is_remembered(env):
     c, frame = env["ingress"], env["frame"]
     img = upload(c).json()
-    assert c.post(f"/api/images/{img['id']}/matte", json={"matte": "flexible_black"}).status_code == 200
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "flexible_black"}).json()
+    assert r["replaced_tv_content_id"] is None
     shown = c.post(f"/api/images/{img['id']}/display").json()
     assert frame.matte_of[shown["tv_content_id"]] == "flexible_black"
+    assert frame.width_of[shown["tv_content_id"]] == 1920
 
 
-def test_change_matte_of_tv_only_picture(env):
+def test_matte_via_tv_tab_on_gallery_picture_uses_original(env):
+    c, frame = env["ingress"], env["frame"]
+    img = upload(c, display="true").json()
+    r = c.post(f"/api/frame/remote-images/{img['tv_content_id']}/matte", json={"matte": "modern_polar"}).json()
+    assert r["replaced_tv_content_id"] == img["tv_content_id"]
+
+
+def test_matte_on_small_tv_only_picture(env):
     c, frame = env["ingress"], env["frame"]
     frame.images["MY_F0002"] = b"x"
+    frame.width_of["MY_F0002"] = 1671
     frame.matte_of["MY_F0002"] = "shadowbox_antique"
     assert c.post("/api/frame/remote-images/MY_F0002/matte", json={"matte": "none"}).status_code == 200
     assert frame.matte_of["MY_F0002"] == "none"
     assert c.get("/api/frame/remote-images").json()["images"][0]["matte_id"] == "none"
 
 
-def test_refused_matte_is_reported_not_hidden(env):
+def test_matte_on_4k_tv_only_picture_explains(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.images["MY_F0001"] = b"x"
+    r = c.post("/api/frame/remote-images/MY_F0001/matte", json={"matte": "modern_polar"})
+    assert r.status_code == 409 and "4K" in r.json()["detail"] and "The Frame Bridge" in r.json()["detail"]
+
+
+def test_silently_ignored_matte_is_reported(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.images["MY_F0002"] = b"x"
+    frame.width_of["MY_F0002"] = 1671
+    frame.ignore_matte = True
+    r = c.post("/api/frame/remote-images/MY_F0002/matte", json={"matte": "modern_polar"})
+    assert r.status_code == 409
+
+
+def test_delete_on_tv_needs_confirmation_and_ingress(env):
     c, frame = env["ingress"], env["frame"]
     img = upload(c, display="true").json()
-    frame.ignore_matte = True
-    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modern_polar"})
-    assert r.status_code == 502 and "nicht übernommen" in r.json()["detail"]
-    assert c.get(f"/api/images/{img['id']}").json()["matte"] == "none"  # not stored as if it worked
+    cid = img["tv_content_id"]
+    assert c.delete(f"/api/frame/remote-images/{cid}").status_code == 400
+    assert frame.deleted == []
+    assert env["external"].delete(f"/api/frame/remote-images/{cid}?confirm=true", headers=auth(env)).status_code in (404, 405)
+    assert frame.deleted == []
+    assert c.delete(f"/api/frame/remote-images/{cid}?confirm=true").status_code == 204
+    assert frame.deleted == [cid]
+    assert c.get(f"/api/images/{img['id']}").json()["tv_content_id"] is None  # local copy stays
+
+
+def test_delete_on_tv_refuses_art_store(env):
+    c = env["ingress"]
+    assert c.delete("/api/frame/remote-images/SAM-S5954?confirm=true").status_code == 502
 
 
 def test_bad_matte_rejected(env):

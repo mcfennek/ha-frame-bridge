@@ -9,7 +9,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import load_settings  # noqa: E402
-from app.frame import FrameError, valid_content_id  # noqa: E402
+from app.frame import FrameError, MatteRefused, valid_content_id  # noqa: E402
 from app.service import Bridge  # noqa: E402
 from app.storage import ImageStore  # noqa: E402
 from app.web import create_external_app, create_ingress_app  # noqa: E402
@@ -25,7 +25,9 @@ class FakeFrame:
         self.fail = False
         self._n = 0
         self.matte_of: dict[str, str] = {}
+        self.width_of: dict[str, int] = {}
         self.ignore_matte = False  # like a TV that silently refuses a matte
+        self.deleted: list[str] = []
 
     configured = True
     paired = True
@@ -45,7 +47,7 @@ class FakeFrame:
 
     async def list_remote(self):
         self._check()
-        return [{"content_id": c, "category_id": "MY-C0002", "width": 3840, "height": 2160,
+        return [{"content_id": c, "category_id": "MY-C0002", "width": self.width_of.get(c, 3840), "height": 2160,
                  "image_date": "2026:11:11 10:00:00", "matte_id": self.matte_of.get(c, "none")} for c in self.images]
 
     async def thumbnail(self, content_id):
@@ -59,7 +61,12 @@ class FakeFrame:
         self._n += 1
         cid = f"MY_F{self._n:04d}"
         self.images[cid] = jpeg
-        self.matte_of[cid] = matte
+        try:
+            self.width_of[cid] = Image.open(io.BytesIO(jpeg)).width
+        except Exception:
+            self.width_of[cid] = 3840
+        # like the real 2025 Frame: a full 4K picture keeps no matte
+        self.matte_of[cid] = matte if self.width_of[cid] < 3840 else "none"
         return cid
 
     async def select(self, content_id, show=True):
@@ -79,8 +86,15 @@ class FakeFrame:
 
     async def change_matte(self, content_id, matte_id):
         self._check()
+        if matte_id != "none" and self.width_of.get(content_id, 3840) >= 3840:
+            raise MatteRefused("Der Fernseher lässt für dieses Bild kein Passepartout zu.")  # error -7
         if not self.ignore_matte:
             self.matte_of[content_id] = matte_id
+
+    async def delete_remote(self, content_id):
+        self._check()
+        self.deleted.append(content_id)
+        self.images.pop(content_id, None)
 
     async def close(self):
         pass
