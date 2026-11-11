@@ -21,6 +21,7 @@ class Settings:
     max_upload_mb: int = 25
     matte: str = "none"
     log_level: str = "info"
+    public_url: str = ""
     data_dir: Path = field(default_factory=lambda: DATA_DIR)
 
     @property

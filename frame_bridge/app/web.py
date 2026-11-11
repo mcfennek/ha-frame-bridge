@@ -21,6 +21,7 @@ from . import __version__
 from .config import INGRESS_PROXY_IP
 from .frame import FrameError, MatteRefused, valid_content_id, valid_matte
 from .imaging import FIT_MODES, ImageError
+from .gpt_schema import gpt_schema
 from .service import Bridge
 from .storage import InvalidImageId
 
@@ -73,6 +74,29 @@ class MatteResult(Image):
     replaced_tv_content_id: str | None = Field(
         None, description="Frühere Kopie auf dem Fernseher, die durch eine passende Version ersetzt wurde; "
                           "sie bleibt dort, bis sie ausdrücklich gelöscht wird")
+
+
+class FileRef(BaseModel):
+    name: str | None = None
+    id: str | None = None
+    mime_type: str | None = None
+    download_link: str | None = None
+
+
+class ImportBody(BaseModel):
+    openaiFileIdRefs: list[FileRef] = Field(min_length=1, max_length=10,
+                                            description="Dateien mit download_link, wie ChatGPT-Aktionen sie senden")
+    title: str | None = Field(None, max_length=200)
+    mode: str = "fit"
+    display: bool = True
+    matte: str | None = None
+
+
+class ImportResult(BaseModel):
+    images: list[Image]
+    displayed: bool
+    display_error: str | None = None
+    errors: list[str]
 
 
 class RandomResult(BaseModel):
@@ -170,6 +194,23 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
         out["displayed"] = display and err is None
         out["display_error"] = err
         return out
+
+    @r.post("/images/import", tags=["images"], response_model=ImportResult,
+            summary="Bilder per Download-Link übernehmen (ChatGPT openaiFileIdRefs)")
+    async def import_images(body: ImportBody, b: Bridge = Depends(bridge)):
+        if body.mode not in FIT_MODES:
+            raise HTTPException(422, "mode muss 'fit' oder 'crop' sein.")
+        if body.matte is not None:
+            try:
+                valid_matte(body.matte)
+            except FrameError as exc:
+                raise HTTPException(422, str(exc)) from None
+        res = await b.import_files([r.model_dump() for r in body.openaiFileIdRefs], body.title, body.mode,
+                                   body.display, body.matte)
+        if not res["images"]:
+            raise HTTPException(422, "Kein Bild übernommen: " + " ".join(res["errors"]))
+        res["images"] = [_image_out(i) for i in res["images"]]
+        return res
 
     @r.get("/images/{image_id}", tags=["images"], response_model=Image, summary="Metadaten eines Bildes")
     async def get_image(image_id: str, b: Bridge = Depends(bridge)):
@@ -325,6 +366,7 @@ def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool 
             "media_player_entity": s.media_player_entity,
             "api_enabled": s.api_enabled,
             "api_port": 8080,
+            "public_url": s.public_url.rstrip("/"),
             "max_upload_mb": s.max_upload_mb,
             "matte": s.matte,
             "paired": b.frame.paired if b.frame.configured else False,
@@ -407,6 +449,15 @@ def create_external_app(get_bridge: Callable[[], Bridge]) -> FastAPI:
                                 headers={"WWW-Authenticate": "Bearer"})
 
     _health_route(app)
+
+    @app.get("/gpt/openapi.json", tags=["system"], summary="Schema für eine ChatGPT-Aktion (ohne Token abrufbar)")
+    async def gpt_openapi(request: Request):
+        url = get_bridge().settings.public_url.rstrip("/")
+        if not url:
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost"
+            url = f"https://{host}"
+        return gpt_schema(url)
+
     app.include_router(
         build_api_router(get_bridge, lambda: get_bridge().settings.max_upload_bytes),
         dependencies=[Depends(require_token)],

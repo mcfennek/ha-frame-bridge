@@ -40,6 +40,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | DELETE | `/api/images/{id}` | nur lokale Kopie löschen |
 | POST | `/api/images/{id}/display` | auf dem Fernseher anzeigen |
 | POST | `/api/frame/random` | zufälliges eigenes Bild (Fernseher + Galerie, nie das aktuelle) |
+| POST | `/api/images/import` | Bilder per Download-Link übernehmen (ChatGPT `openaiFileIdRefs`) |
 | GET | `/api/frame/remote-images` | eigene Bilder auf dem Fernseher (`supported: false`, wenn nicht abrufbar) |
 
 Vollständig: [openapi.json](openapi.json) (OpenAPI 3.1).
@@ -90,13 +91,9 @@ Ein Remote-MCP-Connector braucht eine öffentliche HTTPS-Adresse (Abschnitt 3) u
 
 ## 5. ChatGPT
 
-Über **eigene GPTs mit Aktionen**:
+Schritt-für-Schritt-Anleitung mit Cloudflare-Tunnel, GPT-Aktion und fertigen Anweisungen: **[chatgpt.md](chatgpt.md)**.
 
-1. Öffentliche HTTPS-Adresse einrichten (Abschnitt 3).
-2. GPT bearbeiten → Aktionen → Schema importieren: `https://frame.deine-domain.de/openapi.json` (oder den Inhalt von [openapi.json](openapi.json) mit angepasster `servers`-URL).
-3. Authentifizierung: **API-Schlüssel**, Typ **Bearer**, Token eintragen.
-
-Für den Datei-Upload müssen GPT-Aktionen das erzeugte Bild als Datei übergeben können. Ob und wie das mit von ChatGPT erzeugten Bildern klappt, hängt vom aktuellen Funktionsumfang der Aktionen ab und sollte vor dem Einsatz getestet werden. Funktioniert es nicht direkt, kann das Bild heruntergeladen und über die Weboberfläche hochgeladen werden.
+Kurz: Ein eigener GPT importiert das Schema von `https://<deine-adresse>/gpt/openapi.json` und meldet sich mit dem Bearer-Token an. Bilder aus dem Gespräch – auch selbst erzeugte – übergibt ChatGPT über `POST /api/images/import` als `openaiFileIdRefs` mit Download-Link; das Add-on lädt sie (nur von öffentlichen https-Adressen) und zeigt sie an.
 
 ## 6. Übergabe generierter Bilddateien
 

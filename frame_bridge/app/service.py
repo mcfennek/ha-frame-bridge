@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import imaging
+from .fetch import FetchError, fetch_public
 from .config import Settings
 from .frame import FrameBackend, FrameError, MatteRefused, valid_matte
 from .ha import HomeAssistant
@@ -39,6 +40,7 @@ class Bridge:
         self.store = store
         self.frame = frame
         self.ha = ha
+        self.fetch = fetch_public  # replaceable in tests
 
     # ---------- local library ----------
     async def add_image(
@@ -72,6 +74,35 @@ class Bridge:
             except FrameError as exc:
                 display_error = str(exc)
         return record, display_error
+
+    async def import_files(
+        self, refs: list[dict[str, Any]], title: str | None, mode: str, display: bool, matte: str | None,
+    ) -> dict[str, Any]:
+        """Takes files an AI assistant hands over by download link (ChatGPT: openaiFileIdRefs).
+        Every file is stored; with display=True the last one that arrived is shown."""
+        stored: list[ImageRecord] = []
+        errors: list[str] = []
+        for i, ref in enumerate(refs):
+            name = str(ref.get("name") or f"bild-{i + 1}.png")[-200:]
+            link = ref.get("download_link")
+            if not link:
+                errors.append(f"{name}: kein Download-Link übergeben.")
+                continue
+            try:
+                data, _ctype = await self.fetch(link, self.settings.max_upload_bytes)
+                t = title if (title and len(refs) == 1) else (f"{title} {i + 1}" if title else None)
+                rec, _ = await self.add_image(data, name, t, mode, False, matte)
+                stored.append(rec)
+            except (FetchError, imaging.ImageError, FrameError) as exc:
+                errors.append(f"{name}: {exc}")
+        display_error = None
+        if display and stored:
+            try:
+                stored[-1] = await self.display(stored[-1].id)
+            except FrameError as exc:
+                display_error = str(exc)
+        return {"images": stored, "errors": errors, "displayed": bool(display and stored and not display_error),
+                "display_error": display_error}
 
     # ---------- TV ----------
     async def display(self, image_id: str, art_mode: bool = True) -> ImageRecord:

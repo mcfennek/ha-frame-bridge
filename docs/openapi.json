@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "paths": {
     "/health": {
@@ -21,6 +21,25 @@
                 "schema": {
                   "$ref": "#/components/schemas/Health"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gpt/openapi.json": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Schema für eine ChatGPT-Aktion (ohne Token abrufbar)",
+        "operationId": "gpt_openapi_gpt_openapi_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -107,6 +126,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UploadResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/images/import": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Bilder per Download-Link übernehmen (ChatGPT openaiFileIdRefs)",
+        "operationId": "import_images_api_images_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
                 }
               }
             }
@@ -752,6 +817,56 @@
         ],
         "title": "Body_upload_image_api_images_post"
       },
+      "FileRef": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "download_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Link"
+          }
+        },
+        "type": "object",
+        "title": "FileRef"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -871,6 +986,98 @@
           "thumbnail_url"
         ],
         "title": "Image"
+      },
+      "ImportBody": {
+        "properties": {
+          "openaiFileIdRefs": {
+            "items": {
+              "$ref": "#/components/schemas/FileRef"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Openaifileidrefs",
+            "description": "Dateien mit download_link, wie ChatGPT-Aktionen sie senden"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "default": "fit"
+          },
+          "display": {
+            "type": "boolean",
+            "title": "Display",
+            "default": true
+          },
+          "matte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matte"
+          }
+        },
+        "type": "object",
+        "required": [
+          "openaiFileIdRefs"
+        ],
+        "title": "ImportBody"
+      },
+      "ImportResult": {
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/Image"
+            },
+            "type": "array",
+            "title": "Images"
+          },
+          "displayed": {
+            "type": "boolean",
+            "title": "Displayed"
+          },
+          "display_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Error"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "images",
+          "displayed",
+          "errors"
+        ],
+        "title": "ImportResult"
       },
       "MatteBody": {
         "properties": {

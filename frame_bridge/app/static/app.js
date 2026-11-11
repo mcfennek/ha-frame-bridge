@@ -483,7 +483,8 @@ async function loadSettings() {
     ]);
     kv($("set-api"), [
       ["Status", s.api_enabled ? `aktiv auf Port ${s.api_port} (Container)` : "ausgeschaltet"],
-      ["Spezifikation", s.api_enabled ? "/openapi.json und /docs auf dem API-Port" : "–"],
+      ["Öffentliche Adresse", s.public_url || "nicht eingestellt (Option public_url)"],
+      ["Schema für ChatGPT", s.public_url ? `${s.public_url}/gpt/openapi.json` : "–"],
     ]);
     const dev = $("set-devices");
     dev.replaceChildren();

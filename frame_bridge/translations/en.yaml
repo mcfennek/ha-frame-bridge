@@ -17,5 +17,8 @@ configuration:
   log_level:
     name: Log level
     description: Logging detail.
+  public_url:
+    name: Public API URL
+    description: HTTPS address where the API is reachable from outside, e.g. https://frame.example.com. Used in the ChatGPT action schema.
 network:
   8080/tcp: External REST API (only with api_enabled)

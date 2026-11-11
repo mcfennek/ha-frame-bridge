@@ -17,5 +17,8 @@ configuration:
   log_level:
     name: Protokollstufe
     description: Detailgrad der Protokolle.
+  public_url:
+    name: Öffentliche Adresse der API
+    description: HTTPS-Adresse, unter der die API von außen erreichbar ist, z. B. https://frame.fenner.berlin. Wird im Schema für ChatGPT eingetragen.
 network:
   8080/tcp: Externe REST-API (nur mit api_enabled)

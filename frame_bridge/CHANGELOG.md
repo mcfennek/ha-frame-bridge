@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- ChatGPT-Anbindung: eigener GPT mit Aktion. Neues Schema unter `/gpt/openapi.json` (ohne Token abrufbar, nur die für den Chat nötigen Funktionen, kein Löschen).
+- `POST /api/images/import` übernimmt Bilder per Download-Link, wie ChatGPT sie als `openaiFileIdRefs` sendet – auch selbst erzeugte Bilder. Geladen wird nur von öffentlichen https-Adressen, nie aus dem Heimnetz.
+- Neue Option `public_url` für die öffentliche Adresse der API.
+- Anleitung: `docs/chatgpt.md`.
+
 ## 0.3.0
 
 - Passepartout auch für Bilder in voller 4K-Auflösung: Der Frame lehnt dort Passepartouts ab (Fehler −7). Das Add-on lädt dann automatisch eine Version in 1920×1080 mit Passepartout hoch; bei „Ohne“ kommt wieder die 4K-Version. Das Original bleibt in voller Auflösung gespeichert.
