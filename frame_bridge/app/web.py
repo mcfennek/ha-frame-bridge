@@ -68,6 +68,13 @@ class RemoteImages(BaseModel):
     images: list[RemoteImage]
 
 
+class RandomResult(BaseModel):
+    source: str = Field(description="tv = Bild lag schon auf dem Fernseher, local = aus der Galerie")
+    content_id: str | None = Field(None, description="ID des jetzt angezeigten Bildes auf dem Fernseher")
+    title: str
+    image: Image | None = Field(None, description="Lokales Bild, falls vorhanden")
+
+
 class ArtModeBody(BaseModel):
     on: bool
 
@@ -173,10 +180,13 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
         except FrameError as exc:
             raise _frame_http(exc) from None
 
-    @r.post("/frame/random", tags=["frame"], response_model=Image, summary="Zufälliges lokales Bild anzeigen")
+    @r.post("/frame/random", tags=["frame"], response_model=RandomResult,
+            summary="Zufälliges eigenes Bild anzeigen (Fernseher und Galerie, nie das aktuelle)")
     async def random_image(b: Bridge = Depends(bridge)):
         try:
-            return _image_out(await b.display_random())
+            res = await b.display_random()
+            res["image"] = _image_out(res["image"]) if res["image"] else None
+            return res
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
         except FrameError as exc:

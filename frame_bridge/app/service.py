@@ -84,19 +84,35 @@ class Bridge:
             await self.frame.set_artmode(True)
         return self.store.get(image_id) or record
 
-    async def display_random(self) -> ImageRecord:
-        images = self.store.list()
-        if not images:
-            raise LookupError("Es sind noch keine Bilder gespeichert.")
-        current = None
+    async def display_random(self) -> dict[str, Any]:
+        """Picks from the user's own pictures on the TV and in the local gallery, never the one
+        showing now. TV pictures are selected directly, local ones are uploaded if needed."""
+        st = await self.frame.status()
+        current = (st.get("current") or {}).get("content_id")
         try:
-            st = await self.frame.status()
-            current = (st.get("current") or {}).get("content_id")
+            remote_ids = [i["content_id"] for i in await self.frame.list_remote()]
         except FrameError:
-            pass
-        candidates = [i for i in images if not current or i.tv_content_id != current] or images
-        choice = random.choice(candidates)
-        return await self.display(choice.id)
+            remote_ids = []
+        local = self.store.list()
+        on_tv_local = {i.tv_content_id for i in local if i.tv_content_id in remote_ids}
+
+        # one entry per picture: TV pictures by content id, local ones not on the TV by local id
+        candidates: list[tuple[str, str]] = [("tv", cid) for cid in remote_ids if cid != current]
+        candidates += [("local", i.id) for i in local
+                       if i.tv_content_id not in on_tv_local and (not current or i.tv_content_id != current)]
+        if not candidates:
+            if not remote_ids and not local:
+                raise LookupError("Es gibt noch keine eigenen Bilder – lade zuerst eines hoch.")
+            raise LookupError("Es gibt nur ein Bild, und das wird bereits angezeigt.")
+
+        kind, ref = random.choice(candidates)
+        if kind == "local":
+            rec = await self.display(ref)
+            return {"source": "local", "content_id": rec.tv_content_id, "title": rec.title, "image": rec}
+        await self.frame.select(ref)
+        await self.frame.set_artmode(True)
+        rec = self.store.find_by_tv_content_id(ref)
+        return {"source": "tv", "content_id": ref, "title": rec.title if rec else ref, "image": rec}
 
     async def remote_images(self) -> dict[str, Any]:
         """Only what the TV really reports; never invented entries."""

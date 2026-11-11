@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "paths": {
     "/health": {
@@ -346,7 +346,7 @@
         "tags": [
           "frame"
         ],
-        "summary": "Zufälliges lokales Bild anzeigen",
+        "summary": "Zufälliges eigenes Bild anzeigen (Fernseher und Galerie, nie das aktuelle)",
         "operationId": "random_image_api_frame_random_post",
         "responses": {
           "200": {
@@ -354,7 +354,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Image"
+                  "$ref": "#/components/schemas/RandomResult"
                 }
               }
             }
@@ -702,6 +702,48 @@
           "thumbnail_url"
         ],
         "title": "Image"
+      },
+      "RandomResult": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "tv = Bild lag schon auf dem Fernseher, local = aus der Galerie"
+          },
+          "content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Id",
+            "description": "ID des jetzt angezeigten Bildes auf dem Fernseher"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Image"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lokales Bild, falls vorhanden"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "title"
+        ],
+        "title": "RandomResult"
       },
       "RemoteImage": {
         "properties": {

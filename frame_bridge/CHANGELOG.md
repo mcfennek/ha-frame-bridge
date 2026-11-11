@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- „Zufälliges Bild anzeigen“ wählt jetzt aus allen eigenen Bildern auf dem Fernseher und in der Galerie, nie das gerade angezeigte. Gibt es keine Alternative, kommt eine klare Meldung.
+
 ## 0.1.1
 
 - iPhone- und Kamerafotos (JPEG mit Zusatzbild, „MPO“) werden jetzt angenommen; verwendet wird das Hauptbild.

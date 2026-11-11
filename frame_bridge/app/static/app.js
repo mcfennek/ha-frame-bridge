@@ -99,8 +99,8 @@ $("btn-random").addEventListener("click", async (ev) => {
   const b = ev.currentTarget;
   b.disabled = true;
   try {
-    const img = await api("api/frame/random", { method: "POST" });
-    toast(`„${img.title}“ wird angezeigt`);
+    const res = await api("api/frame/random", { method: "POST" });
+    toast(`„${res.title}“ wird angezeigt`);
     await refreshAll();
   } catch (e) { toast(e.message, true); }
   b.disabled = false;

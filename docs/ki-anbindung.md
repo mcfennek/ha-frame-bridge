@@ -37,7 +37,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | GET | `/api/images/{id}` | Metadaten |
 | DELETE | `/api/images/{id}` | nur lokale Kopie löschen |
 | POST | `/api/images/{id}/display` | auf dem Fernseher anzeigen |
-| POST | `/api/frame/random` | zufälliges Bild anzeigen |
+| POST | `/api/frame/random` | zufälliges eigenes Bild (Fernseher + Galerie, nie das aktuelle) |
 | GET | `/api/frame/remote-images` | eigene Bilder auf dem Fernseher (`supported: false`, wenn nicht abrufbar) |
 
 Vollständig: [openapi.json](openapi.json) (OpenAPI 3.1).

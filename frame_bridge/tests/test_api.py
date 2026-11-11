@@ -70,11 +70,41 @@ def test_display_error_is_502_and_upload_kept(env):
     assert env["ingress"].post(f"/api/images/{r.json()['id']}/display").status_code == 502
 
 
-def test_random(env):
+def test_random_empty_and_single(env):
     c = env["ingress"]
-    assert c.post("/api/frame/random").status_code == 404
-    ids = {upload(c).json()["id"] for _ in range(3)}
-    assert c.post("/api/frame/random").json()["id"] in ids
+    r = c.post("/api/frame/random")
+    assert r.status_code == 404 and "lade zuerst" in r.json()["detail"]
+    upload(c, display="true")
+    r = c.post("/api/frame/random")
+    assert r.status_code == 404 and "bereits angezeigt" in r.json()["detail"]
+
+
+def test_random_never_repeats_current(env):
+    c, frame = env["ingress"], env["frame"]
+    for _ in range(3):
+        upload(c)
+    for _ in range(15):
+        before = frame.current
+        res = c.post("/api/frame/random").json()
+        assert res["content_id"] == frame.current != before
+
+
+def test_random_uses_tv_only_pictures(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.images = {"MY_F0001": b"x", "MY_F0002": b"y"}  # put on the TV by other means
+    frame.current = "MY_F0001"
+    res = c.post("/api/frame/random").json()
+    assert res == {"source": "tv", "content_id": "MY_F0002", "title": "MY_F0002", "image": None}
+    assert frame.art_mode is True
+
+
+def test_random_does_not_double_count_uploaded(env):
+    c, frame = env["ingress"], env["frame"]
+    img = upload(c, display="true").json()  # local and on the TV, showing now
+    frame.images["MY_F0099"] = b"z"
+    res = c.post("/api/frame/random").json()
+    assert res["content_id"] == "MY_F0099"
+    assert len(frame.images) == 2 and img["tv_content_id"] in frame.images
 
 
 def test_remote_images_and_thumbnail(env):
