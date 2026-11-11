@@ -14,6 +14,7 @@ from .frame import SamsungFrame
 from .ha import HomeAssistant
 from .service import Bridge
 from .storage import ImageStore
+from .oauth import OAuthStore
 from .web import create_external_app, create_ingress_app
 
 INGRESS_PORT = 8099
@@ -33,18 +34,19 @@ async def run() -> None:
              "an" if settings.api_enabled else "aus")
 
     store = ImageStore(settings.db_path, settings.images_dir, settings.thumbs_dir)
+    oauth = OAuthStore(settings.db_path)
     frame = SamsungFrame(settings.tv_host, settings.tv_token_file)
     ha = HomeAssistant()
     bridge = Bridge(settings, store, frame, ha)
     settings.api_token()  # make sure a token exists before the API can be enabled
 
     servers = [
-        uvicorn.Server(uvicorn.Config(create_ingress_app(lambda: bridge), host="0.0.0.0", port=INGRESS_PORT,
+        uvicorn.Server(uvicorn.Config(create_ingress_app(lambda: bridge, oauth=oauth), host="0.0.0.0", port=INGRESS_PORT,
                                       log_level="warning", proxy_headers=False))
     ]
     if settings.api_enabled:
         servers.append(
-            uvicorn.Server(uvicorn.Config(create_external_app(lambda: bridge), host="0.0.0.0", port=API_PORT,
+            uvicorn.Server(uvicorn.Config(create_external_app(lambda: bridge, oauth), host="0.0.0.0", port=API_PORT,
                                           log_level="warning", proxy_headers=False))
         )
         log.info("Externe API auf Port %s aktiv (Bearer-Token erforderlich)", API_PORT)

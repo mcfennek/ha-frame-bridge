@@ -502,8 +502,9 @@ async function loadSettings() {
     kv($("set-api"), [
       ["Status", s.api_enabled ? `aktiv auf Port ${s.api_port} (Container)` : "ausgeschaltet"],
       ["Öffentliche Adresse", s.public_url || "nicht eingestellt (Option public_url)"],
-      ["Schema für ChatGPT", s.public_url ? `${s.public_url}/gpt/openapi.json` : "–"],
+      ["MCP-Server", s.public_url ? `${s.public_url}/mcp` : "–"],
     ]);
+    loadAssistants();
     const dev = $("set-devices");
     dev.replaceChildren();
     if (s.discovery_error) dev.textContent = "Abfrage fehlgeschlagen: " + s.discovery_error;
@@ -526,6 +527,28 @@ async function loadSettings() {
     }
   } catch (e) { toast(e.message, true); }
 }
+
+async function loadAssistants() {
+  const box = $("set-assistants");
+  try {
+    const r = await api("api/settings/assistants");
+    box.replaceChildren();
+    if (!r.assistants.length) { box.textContent = "Noch kein Assistent verbunden."; return; }
+    const ul = document.createElement("ul"); ul.className = "assistants";
+    for (const a of r.assistants) {
+      const li = document.createElement("li");
+      li.textContent = `${a.client_name} – verbunden seit ${new Date(a.since * 1000).toLocaleString("de-DE")}`;
+      ul.append(li);
+    }
+    box.append(ul);
+  } catch (e) { box.textContent = e.message; }
+}
+$("btn-revoke").addEventListener("click", async () => {
+  const ok = await confirmDialog("Alle verbundenen KI-Assistenten abmelden? Sie müssen sich danach neu anmelden.", "Abmelden");
+  if (!ok) return;
+  try { await api("api/settings/assistants/revoke", { method: "POST" }); toast("Alle Assistenten abgemeldet"); loadAssistants(); }
+  catch (e) { toast(e.message, true); }
+});
 
 $("btn-pair").addEventListener("click", async (ev) => {
   const b = ev.currentTarget, msg = $("pair-msg");
@@ -561,7 +584,7 @@ $("btn-token").addEventListener("click", async () => {
   catch (e) { toast(e.message, true); }
 });
 $("btn-rotate").addEventListener("click", async () => {
-  const ok = await confirmDialog("Neues Token erzeugen? Das alte Token funktioniert danach nicht mehr.", "Neues Token");
+  const ok = await confirmDialog("Neues Token erzeugen? Das alte Token funktioniert danach nicht mehr, und alle verbundenen KI-Assistenten werden abgemeldet.", "Neues Token");
   if (!ok) return;
   try { const r = await api("api/settings/api-token/rotate", { method: "POST" }); $("token").textContent = r.token; $("token-box").hidden = false; toast("Neues Token erzeugt"); }
   catch (e) { toast(e.message, true); }

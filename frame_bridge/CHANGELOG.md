@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- MCP-Server unter `/mcp` für ChatGPT-Plugins und Claude-Connectors (Streamable HTTP).
+- Anmeldung per OAuth 2.1 (PKCE, automatische Client-Registrierung): Freigabe auf einer Seite des Add-ons mit dem API-Token; Zugriffstoken 1 h, rotierende Refresh-Token 90 Tage, nur als Prüfsumme gespeichert; Sperre nach 5 Fehlversuchen.
+- Werkzeuge: Status, Galerie, Bilder auf dem Fernseher, Passepartouts, Bild übernehmen (inkl. `openai/fileParams`), anzeigen, Zufallsbild, Passepartout mit/ohne, Art Mode. Kein Löschen.
+- Einstellungen zeigen verbundene Assistenten; „Alle Assistenten abmelden“. Ein neues API-Token meldet ebenfalls alle ab.
+- Getestet mit dem offiziellen MCP-Client inkl. kompletter OAuth-Anmeldung.
+
 ## 0.5.1
 
 - Im Tab „Auf dem Fernseher“ hat jedes eigene Bild einen Löschen-Knopf. Gelöscht wird erst nach Bestätigung; der Dialog sagt, ob das Original in der Galerie erhalten bleibt oder das Bild endgültig weg ist.

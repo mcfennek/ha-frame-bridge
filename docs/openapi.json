@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "The Frame Bridge API",
-    "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.5.1"
+    "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen. Unter /mcp gibt es einen MCP-Server mit OAuth-Anmeldung für ChatGPT und Claude.",
+    "version": "0.6.0"
   },
   "paths": {
     "/health": {

@@ -65,7 +65,7 @@ Jeder Aufruf unter `/api` braucht `Authorization: Bearer <Token>`. Spezifikation
 
 Die Weboberfläche ist nur über Home Assistant Ingress erreichbar; die externe API bietet keine Einstellungen, keine Kopplung und keine Token-Verwaltung.
 
-Anbindung an Claude oder ChatGPT: siehe `docs/ki-anbindung.md` im Repository.
+Anbindung an ChatGPT oder Claude über den MCP-Server unter `/mcp` (OAuth-Anmeldung mit dem API-Token): siehe `docs/chatgpt.md` im Repository.
 
 ## Fehlerbehebung
 

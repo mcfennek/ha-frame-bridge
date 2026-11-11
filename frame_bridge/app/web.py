@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -22,6 +22,8 @@ from .config import INGRESS_PROXY_IP
 from .frame import FrameError, MatteRefused, valid_content_id, valid_matte
 from .imaging import FIT_MODES, ImageError
 from .gpt_schema import gpt_schema
+from . import mcp as mcp_server
+from .oauth import OAuthError, OAuthStore, consent_page, redirect_with
 from .service import Bridge
 from .storage import InvalidImageId
 
@@ -347,7 +349,8 @@ def _health_route(app: FastAPI) -> None:
         return {"status": "ok", "version": __version__}
 
 
-def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool = False) -> FastAPI:
+def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool = False,
+                       oauth: OAuthStore | None = None) -> FastAPI:
     app = FastAPI(title="The Frame Bridge (Ingress)", version=__version__, docs_url=None, redoc_url=None,
                   openapi_url=None)
 
@@ -401,9 +404,26 @@ def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool 
     async def show_token() -> dict[str, str]:
         return {"token": get_bridge().settings.api_token()}
 
+    def oauth_store() -> OAuthStore:
+        nonlocal oauth
+        if oauth is None:
+            oauth = OAuthStore(get_bridge().settings.db_path)
+        return oauth
+
     @settings_router.post("/api-token/rotate")
     async def rotate_token() -> dict[str, str]:
-        return {"token": get_bridge().settings.rotate_api_token()}
+        token = get_bridge().settings.rotate_api_token()
+        oauth_store().revoke_all()  # a new token also signs out every connected assistant
+        return {"token": token}
+
+    @settings_router.get("/assistants")
+    async def assistants() -> dict[str, Any]:
+        return {"assistants": oauth_store().grants()}
+
+    @settings_router.post("/assistants/revoke")
+    async def revoke_assistants() -> dict[str, bool]:
+        oauth_store().revoke_all()
+        return {"revoked": True}
 
     app.include_router(settings_router)
 
@@ -442,34 +462,182 @@ def create_ingress_app(get_bridge: Callable[[], Bridge], allow_any_client: bool 
     return app
 
 
-def create_external_app(get_bridge: Callable[[], Bridge]) -> FastAPI:
+def create_external_app(get_bridge: Callable[[], Bridge], oauth: OAuthStore | None = None) -> FastAPI:
     app = FastAPI(
         title="The Frame Bridge API",
         version=__version__,
         description=(
             "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern "
-            "`Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen."
+            "`Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen. "
+            "Unter /mcp gibt es einen MCP-Server mit OAuth-Anmeldung für ChatGPT und Claude."
         ),
         docs_url="/docs",
         redoc_url=None,
     )
     bearer = HTTPBearer(auto_error=False, description="API-Token aus den Add-on-Einstellungen")
+    if oauth is None:
+        oauth = OAuthStore(get_bridge().settings.db_path)
+    app.state.oauth = oauth
+
+    def api_token_ok(token: str | None) -> bool:
+        expected = get_bridge().settings.api_token()
+        return bool(token) and secrets.compare_digest(token.encode(), expected.encode())
 
     async def require_token(creds: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
-        expected = get_bridge().settings.api_token()
-        if creds is None or not secrets.compare_digest(creds.credentials.encode(), expected.encode()):
+        if creds is None or not api_token_ok(creds.credentials):
             raise HTTPException(401, "Ungültiges oder fehlendes API-Token.",
                                 headers={"WWW-Authenticate": "Bearer"})
+
+    def base_url(request: Request) -> str:
+        url = get_bridge().settings.public_url.rstrip("/")
+        if url:
+            return url
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost"
+        return f"https://{host}"
 
     _health_route(app)
 
     @app.get("/gpt/openapi.json", tags=["system"], summary="Schema für eine ChatGPT-Aktion (ohne Token abrufbar)")
     async def gpt_openapi(request: Request):
-        url = get_bridge().settings.public_url.rstrip("/")
-        if not url:
-            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost"
-            url = f"https://{host}"
-        return gpt_schema(url)
+        return gpt_schema(base_url(request))
+
+    # ---------------- OAuth discovery ----------------
+    def resource_metadata(request: Request) -> dict:
+        b = base_url(request)
+        return {"resource": f"{b}/mcp", "authorization_servers": [b], "scopes_supported": ["frame"],
+                "bearer_methods_supported": ["header"], "resource_name": "The Frame Bridge"}
+
+    @app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+    @app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+    async def prm(request: Request):
+        return resource_metadata(request)
+
+    @app.get("/.well-known/oauth-authorization-server", include_in_schema=False)
+    @app.get("/.well-known/oauth-authorization-server/mcp", include_in_schema=False)
+    @app.get("/.well-known/openid-configuration", include_in_schema=False)
+    async def asm(request: Request):
+        b = base_url(request)
+        return {
+            "issuer": b,
+            "authorization_endpoint": f"{b}/oauth/authorize",
+            "token_endpoint": f"{b}/oauth/token",
+            "registration_endpoint": f"{b}/oauth/register",
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "code_challenge_methods_supported": ["S256"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "scopes_supported": ["frame"],
+        }
+
+    def oauth_json(exc: OAuthError) -> JSONResponse:
+        return JSONResponse(exc.body(), status_code=exc.status, headers={"Cache-Control": "no-store"})
+
+    @app.post("/oauth/register", include_in_schema=False)
+    async def register(request: Request):
+        try:
+            meta = await request.json()
+        except Exception:  # noqa: BLE001
+            return oauth_json(OAuthError("invalid_client_metadata", "JSON erwartet."))
+        try:
+            return JSONResponse(oauth.register(meta if isinstance(meta, dict) else {}), status_code=201)
+        except OAuthError as exc:
+            return oauth_json(exc)
+
+    def authorize_params(source) -> tuple[dict[str, str], object]:
+        p = {k: str(source.get(k) or "") for k in
+             ("client_id", "redirect_uri", "response_type", "state", "code_challenge", "code_challenge_method",
+              "resource", "scope")}
+        client = oauth.client(p["client_id"])
+        if client is None:
+            raise HTTPException(400, "Unbekannter Client – bitte die Verbindung im Assistenten neu einrichten.")
+        if not p["redirect_uri"] or not client.redirect_ok(p["redirect_uri"]):
+            raise HTTPException(400, "Ungültige redirect_uri.")
+        return p, client
+
+    def authorize_error(p: dict, error: str, description: str) -> RedirectResponse:
+        return RedirectResponse(redirect_with(p["redirect_uri"], error=error, error_description=description,
+                                              state=p["state"] or None), status_code=302)
+
+    @app.get("/oauth/authorize", include_in_schema=False)
+    async def authorize_page(request: Request):
+        p, client = authorize_params(request.query_params)
+        if p["response_type"] != "code":
+            return authorize_error(p, "unsupported_response_type", "Nur response_type=code.")
+        if not p["code_challenge"] or p["code_challenge_method"] != "S256":
+            return authorize_error(p, "invalid_request", "PKCE mit S256 ist Pflicht.")
+        return HTMLResponse(consent_page(client, p), headers={"Cache-Control": "no-store",
+                                                              "X-Frame-Options": "DENY"})
+
+    @app.post("/oauth/authorize", include_in_schema=False)
+    async def authorize_submit(request: Request):
+        form = await request.form()
+        p, client = authorize_params(form)
+        if p["response_type"] != "code" or not p["code_challenge"] or p["code_challenge_method"] != "S256":
+            return authorize_error(p, "invalid_request", "Ungültige Anfrage.")
+        if form.get("decision") != "allow":
+            return authorize_error(p, "access_denied", "Zugriff abgelehnt.")
+        who = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
+        if oauth.too_many_failures(who):
+            return HTMLResponse(consent_page(client, p, "Zu viele Fehlversuche. Bitte in 10 Minuten erneut versuchen."),
+                                status_code=429)
+        if not api_token_ok(str(form.get("api_token") or "")):
+            oauth.note_failure(who)
+            return HTMLResponse(consent_page(client, p, "Das Token stimmt nicht."), status_code=401)
+        code = oauth.issue_code(client, p["redirect_uri"], p["code_challenge"], p["resource"] or None)
+        return RedirectResponse(redirect_with(p["redirect_uri"], code=code, state=p["state"] or None,
+                                              iss=base_url(request)), status_code=302)
+
+    @app.post("/oauth/token", include_in_schema=False)
+    async def token(request: Request):
+        form = dict(await request.form())
+        try:
+            grant = form.get("grant_type")
+            if grant == "authorization_code":
+                res = oauth.exchange_code(form)
+            elif grant == "refresh_token":
+                res = oauth.refresh(form)
+            else:
+                raise OAuthError("unsupported_grant_type", "Nur authorization_code und refresh_token.")
+        except OAuthError as exc:
+            return oauth_json(exc)
+        return JSONResponse(res, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+    # ---------------- MCP ----------------
+    def mcp_unauthorized(request: Request) -> JSONResponse:
+        meta = f"{base_url(request)}/.well-known/oauth-protected-resource/mcp"
+        return JSONResponse({"error": "invalid_token", "error_description": "Anmeldung erforderlich."},
+                            status_code=401,
+                            headers={"WWW-Authenticate": f'Bearer resource_metadata="{meta}", scope="frame"'})
+
+    def mcp_authorized(request: Request) -> bool:
+        auth = request.headers.get("authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return False
+        tok = auth[7:].strip()
+        return oauth.check_access(tok) or api_token_ok(tok)  # the API token works too (Claude Code, tests)
+
+    @app.post("/mcp", include_in_schema=False)
+    async def mcp_post(request: Request):
+        if not mcp_authorized(request):
+            return mcp_unauthorized(request)
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
+                                status_code=400)
+        b = get_bridge()
+        if isinstance(body, list):
+            replies = [r for r in [await mcp_server.handle_message(b, m) for m in body] if r is not None]
+            return JSONResponse(replies) if replies else Response(status_code=202)
+        reply = await mcp_server.handle_message(b, body)
+        return JSONResponse(reply) if reply is not None else Response(status_code=202)
+
+    @app.get("/mcp", include_in_schema=False)
+    @app.delete("/mcp", include_in_schema=False)
+    async def mcp_other(request: Request):
+        if not mcp_authorized(request):
+            return mcp_unauthorized(request)
+        return Response(status_code=405, headers={"Allow": "POST"})
 
     app.include_router(
         build_api_router(get_bridge, lambda: get_bridge().settings.max_upload_bytes),

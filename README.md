@@ -11,7 +11,7 @@ Eigene Bilder auf den Samsung The Frame bringen: hochladen, für 16:9 vorbereite
 5. **Starten**, optional „Beim Systemstart starten“ und „Watchdog“ aktivieren.
 6. **The Frame** in der Seitenleiste öffnen → Einstellungen → **Mit Fernseher koppeln**.
 
-Details: [frame_bridge/DOCS.md](frame_bridge/DOCS.md) · ChatGPT: [docs/chatgpt.md](docs/chatgpt.md) · KI-Anbindung: [docs/ki-anbindung.md](docs/ki-anbindung.md) · API: [docs/openapi.json](docs/openapi.json)
+Details: [frame_bridge/DOCS.md](frame_bridge/DOCS.md) · ChatGPT & Claude (MCP): [docs/chatgpt.md](docs/chatgpt.md) · KI-Anbindung: [docs/ki-anbindung.md](docs/ki-anbindung.md) · API: [docs/openapi.json](docs/openapi.json)
 
 ## Aufbau
 

@@ -1,81 +1,79 @@
-# The Frame Bridge mit ChatGPT verbinden (eigener GPT mit Aktion)
+# The Frame Bridge mit ChatGPT oder Claude verbinden (MCP)
 
-Danach genügt in ChatGPT ein Satz wie: *„Erstelle ein Herbstbild mit dem Schriftzug Happy Birthday Astrid und zeige es auf meinem Frame.“*
-
-## 1. Öffentliche Adresse über den Cloudflare-Tunnel
-
-Cloudflare-Dashboard → **Zero Trust → Networks → Tunnels** → deinen Home-Assistant-Tunnel → **Public Hostname → Add a public hostname**:
-
-| Feld | Wert |
-|---|---|
-| Subdomain | `frame` |
-| Domain | deine Domain, z. B. `fenner.berlin` |
-| Service Type | `HTTP` |
-| URL | `fe001382-frame-bridge:8080` |
-
-Der Tunnel erreicht das Add-on intern; im Router und in Home Assistant wird kein Port geöffnet.
-
-Test im Browser: `https://frame.fenner.berlin/health` → `{"status":"ok",…}`. Alles unter `/api` antwortet ohne Token mit 401.
-
-## 2. Add-on einstellen
-
-Konfiguration von The Frame Bridge:
-
-- `api_enabled`: an
-- `public_url`: `https://frame.fenner.berlin`
-
-Neu starten. In der Weboberfläche unter **Einstellungen → Externe REST-API → Token anzeigen** das Token kopieren.
-
-## 3. GPT anlegen
-
-ChatGPT → **GPTs → Erstellen → Konfigurieren**:
-
-- **Name:** The Frame
-- **Beschreibung:** Zeigt Bilder auf meinem Samsung The Frame.
-- **Fähigkeiten:** *Bildgenerierung* einschalten.
-- **Anweisungen:** den Text aus Abschnitt 4 einfügen.
-
-**Aktionen → Neue Aktion erstellen:**
-
-1. **Authentifizierung:** API-Schlüssel → Typ **Bearer** → Token einfügen.
-2. **Schema → Von URL importieren:** `https://frame.fenner.berlin/gpt/openapi.json`
-3. **Datenschutzrichtlinie:** eine erreichbare Seite angeben, falls ChatGPT eine verlangt (für einen privaten GPT reicht z. B. die Repository-Adresse).
-
-Den GPT nur für dich speichern („Nur ich“).
-
-Beim ersten Aufruf fragt ChatGPT, ob es `frame.fenner.berlin` aufrufen darf – mit **Immer erlauben** entfällt die Frage künftig.
-
-## 4. Anweisungen für den GPT
+Das Add-on bringt einen MCP-Server mit Anmeldung (OAuth) mit:
 
 ```
-Du steuerst den Samsung The Frame im Wohnzimmer über die Aktion "The Frame Bridge".
-
-- Soll ein Bild erstellt und gezeigt werden: Erzeuge es im Querformat (möglichst breit, 16:9)
-  und übergib es danach mit importImages (display=true, passender kurzer title).
-  Schrift nicht zu nah an den Rand setzen.
-- Hat der Nutzer ein Bild hochgeladen und will es zeigen: importImages mit diesem Bild.
-- "Zeig ein anderes / zufälliges Bild": showRandomImage.
-- Gespeicherte Bilder nennen oder eines davon zeigen: listImages, dann showImage.
-- Passepartout ("mit Rahmen" / "ohne Rahmen"): passepartout=true bzw. false bei importImages,
-  für ein schon gespeichertes Bild setImageMatte mit passepartout=true/false.
-  Sagt der Nutzer nichts dazu, passepartout weglassen.
-  Nur wenn er einen bestimmten Stil oder eine Farbe nennt: listMattes, dann matte angeben.
-- "Was läuft gerade?": getFrameStatus.
-- Antworte kurz auf Deutsch und sag, was auf dem Fernseher passiert ist.
-  Meldet die Aktion einen Fehler, gib die Meldung verständlich weiter.
+https://frame.fenner.berlin/mcp
 ```
 
-## Passepartout
+Danach genügt im Chat ein Satz wie: *„Zeig ein zufälliges Bild auf dem Frame“* oder *„Zeig dieses Foto mit Rahmen auf dem Frame“*.
 
-„Mit Rahmen“ verwendet das Passepartout aus der Add-on-Option `ai_matte` – Standard **Modern schmal, Warm** (`modernthin_warm`).
+## 1. Voraussetzungen (einmalig)
 
-## Schema aktualisieren
+1. **Öffentliche Adresse über den Cloudflare-Tunnel:** Cloudflare-Dashboard → **Networking → Tunnels** → Tunnel → **Add route → Published application** → Hostname `frame.fenner.berlin`, Service URL `http://fe001382-frame-bridge:8080`.
+   Test: `https://frame.fenner.berlin/health` → `{"status":"ok",…}`.
+2. **Add-on-Konfiguration:** `api_enabled` an, `public_url` = `https://frame.fenner.berlin`.
+3. **API-Token** bereithalten: Weboberfläche → Einstellungen → Externe REST-API → Token anzeigen. Du brauchst es einmal auf der Anmeldeseite.
 
-Nach einem Add-on-Update mit geänderten Aktionen im GPT unter **Aktionen** das Schema erneut **von URL importieren** und den GPT speichern.
+## 2. ChatGPT (Plugin mit eigenem MCP-Server)
 
-## Sicherheit
+OpenAI ersetzt eigene GPTs durch Plugins; externe Dienste werden dort als MCP-Server eingebunden. Die genauen Menübezeichnungen ändern sich gerade – sinngemäß:
 
-- Jeder Aufruf unter `/api` braucht das Token; ohne Token nur `/health` und das Schema.
-- Bei Verdacht auf Missbrauch: Einstellungen → **Neues Token erzeugen** und im GPT eintragen.
-- ChatGPT kann keine Bilder auf dem Fernseher löschen – das geht nur in der Weboberfläche nach Bestätigung.
-- Bilder werden nur von öffentlichen https-Adressen geladen, nie aus dem Heimnetz.
+1. In ChatGPT (Web) die Plugins öffnen (`chatgpt.com/plugins`). Bei Plus/Pro ggf. zuerst in den Einstellungen den **Entwicklermodus** einschalten.
+2. **Hinzufügen → eigenen MCP-Server erstellen.**
+3. URL: `https://frame.fenner.berlin/mcp`, Anmeldung: **OAuth**. Client-ID und -Secret leer lassen – ChatGPT registriert sich selbst.
+4. Es öffnet sich die Seite **„Zugriff auf The Frame erlauben?“** von deinem Add-on. API-Token eingeben → **Zugriff erlauben**.
+5. Im Chat das Plugin auswählen bzw. erwähnen und loslegen.
+
+**Hinweis zu ChatGPT Pro:** Je nach aktuellem Stand erlaubt Pro bei eigenen MCP-Servern nur lesende Werkzeuge. Dann funktionieren „Was läuft gerade?“ und „Welche Bilder habe ich?“, aber nicht „Zeig …“. Werkzeuge, die etwas ändern, sind korrekt als solche gekennzeichnet; ChatGPT fragt vor dem Ausführen nach.
+
+## 3. Claude
+
+Einstellungen → **Connectors** → **Benutzerdefinierten Connector hinzufügen**:
+
+- Name: The Frame
+- URL: `https://frame.fenner.berlin/mcp`
+- OAuth-Felder leer lassen
+
+Dann **Verbinden** → Anmeldeseite des Add-ons → Token eingeben → **Zugriff erlauben**.
+
+Claude Code / Desktop-Konfiguration mit festem Token geht auch:
+
+```bash
+claude mcp add --transport http the-frame https://frame.fenner.berlin/mcp \
+  --header "Authorization: Bearer <API-Token>"
+```
+
+## 4. Werkzeuge
+
+| Werkzeug | Zweck | ändert etwas |
+|---|---|---|
+| `get_frame_status` | erreichbar, Art Mode, aktuelles Bild | nein |
+| `list_images` | Bilder der Galerie | nein |
+| `list_tv_images` | eigene Bilder auf dem Fernseher | nein |
+| `list_mattes` | verfügbare Passepartouts | nein |
+| `import_image` | Bild aus dem Chat (Datei oder https-Adresse) speichern und anzeigen; `passepartout` true/false | ja |
+| `show_image` | gespeichertes Bild anzeigen | ja |
+| `show_random_image` | zufälliges Bild, nie das aktuelle | ja |
+| `set_image_matte` | mit/ohne Rahmen bzw. bestimmter Stil | ja |
+| `set_art_mode` | Art Mode an/aus | ja |
+
+Löschen auf dem Fernseher gibt es bewusst nicht – nur in der Weboberfläche nach Bestätigung.
+
+„Mit Rahmen“ verwendet die Option `ai_matte` (Standard **Modern schmal, Warm**, `modernthin_warm`).
+
+## 5. Bilder aus dem Chat
+
+`import_image` nimmt Dateien so an, wie ChatGPT sie über `openai/fileParams` übergibt (Download-Link), oder eine öffentliche https-Adresse (`image_url`). Ob ChatGPT auch **selbst erzeugte** Bilder an ein MCP-Werkzeug übergibt, ist bei OpenAI noch nicht verbindlich dokumentiert – hochgeladene Fotos funktionieren laut Dokumentation. Klappt es mit einem erzeugten Bild nicht, das Bild speichern und in der Weboberfläche hochladen.
+
+Geladen wird nur von öffentlichen https-Adressen, nie aus dem Heimnetz.
+
+## 6. Sicherheit
+
+- Ohne Anmeldung antwortet `/mcp` mit 401. Freigeben kann nur, wer das API-Token kennt; nach 5 Fehlversuchen ist die Anmeldeseite 10 Minuten gesperrt.
+- Zugriffstoken gelten 1 Stunde, Refresh-Token 90 Tage und werden bei jeder Erneuerung ausgetauscht. Gespeichert werden nur Prüfsummen.
+- Einstellungen → **Alle Assistenten abmelden** beendet jeden Zugriff. **Neues Token erzeugen** tut das ebenfalls.
+
+## Älter: GPT-Aktion
+
+Für eigene GPTs gibt es weiterhin das Aktionsschema unter `https://frame.fenner.berlin/gpt/openapi.json` (Bearer-Token). OpenAI stellt eigene GPTs jedoch ein; neue Einrichtungen bitte über MCP (Abschnitt 2).
