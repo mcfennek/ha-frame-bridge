@@ -1,0 +1,6 @@
+fastapi==0.115.6
+uvicorn==0.34.0
+python-multipart==0.0.20
+pillow==11.1.0
+aiohttp==3.11.11
+samsungframetv==4.1.4

@@ -1,0 +1,21 @@
+configuration:
+  tv_host:
+    name: IP-Adresse des Fernsehers
+    description: Lokale IP-Adresse des Samsung The Frame, z. B. 192.168.0.150.
+  media_player_entity:
+    name: Media Player
+    description: Media-Player-Entität des Fernsehers aus der Samsung-Integration, z. B. media_player.wohnzimmer_the_frame_65.
+  api_enabled:
+    name: Externe REST-API
+    description: Startet die REST-API mit Bearer-Token auf Port 8080. Zusätzlich unter Netzwerk einen Host-Port eintragen.
+  max_upload_mb:
+    name: Maximale Upload-Größe (MB)
+    description: Größere Dateien werden abgelehnt.
+  matte:
+    name: Passepartout
+    description: Passepartout auf dem Fernseher, z. B. none, modern_apricot oder shadowbox_polar.
+  log_level:
+    name: Protokollstufe
+    description: Detailgrad der Protokolle.
+network:
+  8080/tcp: Externe REST-API (nur mit api_enabled)

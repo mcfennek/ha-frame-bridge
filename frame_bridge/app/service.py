@@ -1,0 +1,141 @@
+"""Business logic shared by the web UI and the REST API."""
+from __future__ import annotations
+
+import asyncio
+import logging
+import random
+from datetime import datetime, timezone
+from typing import Any
+
+from . import imaging
+from .config import Settings
+from .frame import FrameBackend, FrameError
+from .ha import HomeAssistant
+from .storage import ImageRecord, ImageStore
+
+_LOGGER = logging.getLogger(__name__)
+
+MAX_TITLE = 120
+
+
+def clean_title(title: str | None, fallback: str) -> str:
+    t = " ".join((title or "").split())[:MAX_TITLE]
+    if t:
+        return t
+    stem = fallback.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0]
+    return " ".join(stem.replace("_", " ").replace("-", " ").split())[:MAX_TITLE] or "Ohne Titel"
+
+
+class Bridge:
+    def __init__(self, settings: Settings, store: ImageStore, frame: FrameBackend, ha: HomeAssistant):
+        self.settings = settings
+        self.store = store
+        self.frame = frame
+        self.ha = ha
+
+    # ---------- local library ----------
+    async def add_image(
+        self, data: bytes, filename: str, title: str | None, mode: str = "fit", display: bool = False
+    ) -> tuple[ImageRecord, str | None]:
+        prepared = await asyncio.to_thread(imaging.prepare, data, mode)
+        image_id = self.store.new_id()
+        self.store.image_path(image_id).write_bytes(prepared.jpeg)
+        self.store.thumb_path(image_id).write_bytes(prepared.thumb)
+        record = ImageRecord(
+            id=image_id,
+            title=clean_title(title, filename or ""),
+            created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            width=prepared.width,
+            height=prepared.height,
+            source_width=prepared.source_width,
+            source_height=prepared.source_height,
+            fit_mode=mode,
+            original_name=(filename or "")[-200:],
+            size_bytes=len(prepared.jpeg),
+        )
+        self.store.add(record)
+        display_error = None
+        if display:
+            try:
+                await self.display(image_id)
+                record = self.store.get(image_id) or record
+            except FrameError as exc:
+                display_error = str(exc)
+        return record, display_error
+
+    # ---------- TV ----------
+    async def display(self, image_id: str, art_mode: bool = True) -> ImageRecord:
+        record = self.store.get(image_id)
+        if record is None:
+            raise KeyError(image_id)
+        content_id = record.tv_content_id
+        if content_id:
+            try:
+                await self.frame.select(content_id)
+            except FrameError:
+                _LOGGER.info("content %s not selectable any more, uploading again", content_id)
+                content_id = None
+        if not content_id:
+            jpeg = self.store.image_path(image_id).read_bytes()
+            content_id = await self.frame.upload(jpeg, matte=self.settings.matte)
+            self.store.set_tv_content_id(image_id, content_id)
+            await self.frame.select(content_id)
+        if art_mode:
+            await self.frame.set_artmode(True)
+        return self.store.get(image_id) or record
+
+    async def display_random(self) -> ImageRecord:
+        images = self.store.list()
+        if not images:
+            raise LookupError("Es sind noch keine Bilder gespeichert.")
+        current = None
+        try:
+            st = await self.frame.status()
+            current = (st.get("current") or {}).get("content_id")
+        except FrameError:
+            pass
+        candidates = [i for i in images if not current or i.tv_content_id != current] or images
+        choice = random.choice(candidates)
+        return await self.display(choice.id)
+
+    async def remote_images(self) -> dict[str, Any]:
+        """Only what the TV really reports; never invented entries."""
+        try:
+            items = await self.frame.list_remote()
+        except FrameError as exc:
+            return {"supported": False, "images": [], "message": str(exc)}
+        for item in items:
+            local = self.store.find_by_tv_content_id(item["content_id"])
+            item["local_id"] = local.id if local else None
+            item["local_title"] = local.title if local else None
+        return {"supported": True, "images": items, "message": None}
+
+    async def remote_thumbnail(self, content_id: str) -> bytes:
+        cache = self.settings.tv_thumbs_dir / f"{content_id}.jpg"
+        if cache.exists():
+            return cache.read_bytes()
+        data = await self.frame.thumbnail(content_id)
+        cache.write_bytes(data)
+        return data
+
+    async def status(self) -> dict[str, Any]:
+        frame_status = await self.frame.status()
+        ha_state = None
+        entity = self.settings.media_player_entity
+        if entity:
+            try:
+                s = await self.ha.state(entity)
+                if s:
+                    ha_state = {"entity_id": entity, "state": s.get("state"),
+                                "name": s.get("attributes", {}).get("friendly_name")}
+            except Exception as exc:  # noqa: BLE001
+                ha_state = {"entity_id": entity, "state": None, "error": str(exc)}
+        current = frame_status.get("current") or {}
+        local = self.store.find_by_tv_content_id(current["content_id"]) if current.get("content_id") else None
+        return {
+            "frame": frame_status,
+            "home_assistant": ha_state,
+            "current_local_image": local.to_dict() if local else None,
+            "image_count": self.store.count(),
+            "storage_bytes": self.store.disk_usage(),
+        }

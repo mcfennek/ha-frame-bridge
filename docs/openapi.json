@@ -1,0 +1,982 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "The Frame Bridge API",
+    "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Lebenszeichen",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/frame/status": {
+      "get": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Verbindungs- und Art-Mode-Status",
+        "operationId": "frame_status_api_frame_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Frame Status Api Frame Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/images": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Lokale Bilder",
+        "operationId": "list_images_api_images_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Image"
+                  },
+                  "type": "array",
+                  "title": "Response List Images Api Images Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Bild hochladen (JPG/PNG), wird für 16:9 vorbereitet",
+        "operationId": "upload_image_api_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_api_images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/images/{image_id}": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Metadaten eines Bildes",
+        "operationId": "get_image_api_images__image_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Lokales Bild löschen (Bilder auf dem Fernseher bleiben unberührt)",
+        "operationId": "delete_image_api_images__image_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/images/{image_id}/file": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Vorbereitetes Bild (3840×2160 JPEG)",
+        "operationId": "image_file_api_images__image_id__file_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/images/{image_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Vorschaubild",
+        "operationId": "image_thumb_api_images__image_id__thumbnail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/images/{image_id}/display": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Bild auf The Frame anzeigen (lädt es bei Bedarf hoch)",
+        "operationId": "display_image_api_images__image_id__display_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/frame/random": {
+      "post": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Zufälliges lokales Bild anzeigen",
+        "operationId": "random_image_api_frame_random_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/frame/artmode": {
+      "post": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Art Mode ein- oder ausschalten",
+        "operationId": "artmode_api_frame_artmode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtModeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Artmode Api Frame Artmode Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/frame/remote-images": {
+      "get": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Eigene Bilder auf dem Fernseher (nur wenn der Fernseher sie liefert)",
+        "operationId": "remote_images_api_frame_remote_images_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteImages"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/frame/remote-images/{content_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Vorschaubild vom Fernseher",
+        "operationId": "remote_thumb_api_frame_remote_images__content_id__thumbnail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "content_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/frame/remote-images/{content_id}/display": {
+      "post": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Vorhandenes Bild auf dem Fernseher im Art Mode anzeigen",
+        "operationId": "remote_display_api_frame_remote_images__content_id__display_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "content_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Remote Display Api Frame Remote Images  Content Id  Display Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArtModeBody": {
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "title": "On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "on"
+        ],
+        "title": "ArtModeBody"
+      },
+      "Body_upload_image_api_images_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "JPG- oder PNG-Datei"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "fit (Einpassen) oder crop (Zuschneiden)",
+            "default": "fit"
+          },
+          "display": {
+            "type": "boolean",
+            "title": "Display",
+            "description": "Nach dem Upload direkt auf dem Fernseher zeigen",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_api_images_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "title": "Health"
+      },
+      "Image": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Lokale Bild-ID (32 Hex-Zeichen)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "description": "Upload-Zeitpunkt, ISO 8601 UTC"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "source_width": {
+            "type": "integer",
+            "title": "Source Width"
+          },
+          "source_height": {
+            "type": "integer",
+            "title": "Source Height"
+          },
+          "fit_mode": {
+            "type": "string",
+            "title": "Fit Mode",
+            "description": "fit = Einpassen, crop = Zuschneiden"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "tv_content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Content Id",
+            "description": "ID auf dem Fernseher, sobald einmal übertragen"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "title": "Thumbnail Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "width",
+          "height",
+          "source_width",
+          "source_height",
+          "fit_mode",
+          "original_name",
+          "size_bytes",
+          "file_url",
+          "thumbnail_url"
+        ],
+        "title": "Image"
+      },
+      "RemoteImage": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "image_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Date"
+          },
+          "matte_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matte Id"
+          },
+          "local_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Id",
+            "description": "Lokales Bild, aus dem es hochgeladen wurde"
+          },
+          "local_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Title"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "title": "Thumbnail Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content_id",
+          "thumbnail_url"
+        ],
+        "title": "RemoteImage"
+      },
+      "RemoteImages": {
+        "properties": {
+          "supported": {
+            "type": "boolean",
+            "title": "Supported",
+            "description": "false, wenn der Fernseher keine Liste geliefert hat"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteImage"
+            },
+            "type": "array",
+            "title": "Images"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supported",
+          "images"
+        ],
+        "title": "RemoteImages"
+      },
+      "UploadResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Lokale Bild-ID (32 Hex-Zeichen)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "description": "Upload-Zeitpunkt, ISO 8601 UTC"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "source_width": {
+            "type": "integer",
+            "title": "Source Width"
+          },
+          "source_height": {
+            "type": "integer",
+            "title": "Source Height"
+          },
+          "fit_mode": {
+            "type": "string",
+            "title": "Fit Mode",
+            "description": "fit = Einpassen, crop = Zuschneiden"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "tv_content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Content Id",
+            "description": "ID auf dem Fernseher, sobald einmal übertragen"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "title": "Thumbnail Url"
+          },
+          "displayed": {
+            "type": "boolean",
+            "title": "Displayed"
+          },
+          "display_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "width",
+          "height",
+          "source_width",
+          "source_height",
+          "fit_mode",
+          "original_name",
+          "size_bytes",
+          "file_url",
+          "thumbnail_url",
+          "displayed"
+        ],
+        "title": "UploadResult"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "description": "API-Token aus den Add-on-Einstellungen",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://homeassistant.local:8787",
+      "description": "Beispiel: Home Assistant mit gemapptem API-Port"
+    }
+  ]
+}
