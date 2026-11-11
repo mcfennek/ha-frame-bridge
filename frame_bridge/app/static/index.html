@@ -68,6 +68,11 @@
             <label><input type="radio" name="mode" value="crop"><span>Zuschneiden</span></label>
           </fieldset>
           <p class="hint" id="mode-hint">Das ganze Bild bleibt sichtbar, freie Flächen werden unscharf aufgefüllt.</p>
+          <div class="matte-row">
+            <span class="matte-row-label">Passepartout</span>
+            <span id="upload-matte-label">Ohne</span>
+            <button class="btn ghost small" id="btn-upload-matte" type="button">Ändern</button>
+          </div>
           <label class="check"><input type="checkbox" id="display-now" checked> Direkt auf dem Fernseher anzeigen</label>
           <div class="progress" id="progress" hidden><div class="bar" id="bar"></div></div>
           <p class="msg" id="upload-msg" role="status"></p>
@@ -144,6 +149,20 @@
   </form>
 </dialog>
 
+<dialog id="matte-dialog" class="matte-dialog">
+  <form method="dialog">
+    <h3>Passepartout</h3>
+    <div class="matte-preview" id="matte-preview"><div class="mp-mat"><img id="matte-preview-img" alt=""></div></div>
+    <fieldset class="chips" id="matte-types"><legend>Stil</legend></fieldset>
+    <fieldset class="swatches" id="matte-colors"><legend>Farbe</legend></fieldset>
+    <p class="hint" id="matte-note"></p>
+    <div class="row end">
+      <button class="btn ghost" value="cancel">Abbrechen</button>
+      <button class="btn primary" value="ok">Übernehmen</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <template id="tpl-card">
@@ -155,6 +174,9 @@
     </figcaption>
     <div class="card-actions">
       <button class="btn soft show" type="button">Auf TV anzeigen</button>
+      <button class="icon-btn matte-btn" type="button" title="Passepartout" aria-label="Passepartout">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><rect x="7.5" y="8.5" width="9" height="7"/></svg>
+      </button>
       <button class="icon-btn del" type="button" title="Löschen" aria-label="Löschen">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
       </button>

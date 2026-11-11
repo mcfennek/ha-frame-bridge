@@ -27,7 +27,7 @@ Der Fernseher muss dabei eingeschaltet oder im Art Mode sein und im selben Netz 
 | `media_player_entity` | Media Player der Samsung-Integration (Statusanzeige) |
 | `api_enabled` | externe REST-API auf Port 8080 starten (Standard: aus) |
 | `max_upload_mb` | maximale Dateigröße beim Upload |
-| `matte` | Passepartout auf dem Fernseher, z. B. `none`, `modern_apricot` |
+| `matte` | Standard-Passepartout für neue Uploads, z. B. `none`, `shadowbox_polar`; pro Bild in der Galerie änderbar |
 | `log_level` | `debug`, `info`, `warning`, `error` |
 
 ## Daten und Sicherung

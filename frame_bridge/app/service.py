@@ -9,7 +9,7 @@ from typing import Any
 
 from . import imaging
 from .config import Settings
-from .frame import FrameBackend, FrameError
+from .frame import FrameBackend, FrameError, valid_matte
 from .ha import HomeAssistant
 from .storage import ImageRecord, ImageStore
 
@@ -35,8 +35,10 @@ class Bridge:
 
     # ---------- local library ----------
     async def add_image(
-        self, data: bytes, filename: str, title: str | None, mode: str = "fit", display: bool = False
+        self, data: bytes, filename: str, title: str | None, mode: str = "fit", display: bool = False,
+        matte: str | None = None,
     ) -> tuple[ImageRecord, str | None]:
+        matte = valid_matte(matte or self.settings.matte or "none")
         prepared = await asyncio.to_thread(imaging.prepare, data, mode)
         image_id = self.store.new_id()
         self.store.image_path(image_id).write_bytes(prepared.jpeg)
@@ -52,6 +54,7 @@ class Bridge:
             fit_mode=mode,
             original_name=(filename or "")[-200:],
             size_bytes=len(prepared.jpeg),
+            matte=matte,
         )
         self.store.add(record)
         display_error = None
@@ -77,7 +80,7 @@ class Bridge:
                 content_id = None
         if not content_id:
             jpeg = self.store.image_path(image_id).read_bytes()
-            content_id = await self.frame.upload(jpeg, matte=self.settings.matte)
+            content_id = await self.frame.upload(jpeg, matte=record.matte)
             self.store.set_tv_content_id(image_id, content_id)
             await self.frame.select(content_id)
         if art_mode:
@@ -113,6 +116,47 @@ class Bridge:
         await self.frame.set_artmode(True)
         rec = self.store.find_by_tv_content_id(ref)
         return {"source": "tv", "content_id": ref, "title": rec.title if rec else ref, "image": rec}
+
+    async def mattes(self) -> dict[str, list[str]]:
+        if not getattr(self, "_mattes", None):
+            self._mattes = await self.frame.mattes()
+        return self._mattes
+
+    async def _apply_matte_on_tv(self, content_id: str, matte: str) -> None:
+        """change_matte gives no reply on failure, so read the TV's list back to be sure."""
+        await self.frame.change_matte(content_id, matte)
+        for item in await self.frame.list_remote():
+            if item["content_id"] == content_id:
+                if (item.get("matte_id") or "none") != matte:
+                    raise FrameError(
+                        "Der Fernseher hat dieses Passepartout für das Bild nicht übernommen. "
+                        "Manche Passepartouts lässt er nur bei bestimmten Bildgrößen zu – bitte ein anderes wählen."
+                    )
+                return
+        raise FrameError("Das Bild ist nicht mehr auf dem Fernseher.")
+
+    async def set_local_matte(self, image_id: str, matte: str) -> ImageRecord:
+        """Remembered for the next upload; changed on the TV right away if the picture is there."""
+        valid_matte(matte)
+        record = self.store.get(image_id)
+        if record is None:
+            raise KeyError(image_id)
+        if record.tv_content_id:
+            try:
+                remote = {i["content_id"] for i in await self.frame.list_remote()}
+            except FrameError:
+                remote = set()
+            if record.tv_content_id in remote:
+                await self._apply_matte_on_tv(record.tv_content_id, matte)
+        self.store.set_matte(image_id, matte)
+        return self.store.get(image_id) or record
+
+    async def set_remote_matte(self, content_id: str, matte: str) -> None:
+        valid_matte(matte)
+        await self._apply_matte_on_tv(content_id, matte)
+        local = self.store.find_by_tv_content_id(content_id)
+        if local:
+            self.store.set_matte(local.id, matte)
 
     async def remote_images(self) -> dict[str, Any]:
         """Only what the TV really reports; never invented entries."""

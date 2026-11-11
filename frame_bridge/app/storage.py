@@ -29,6 +29,7 @@ class ImageRecord:
     original_name: str
     size_bytes: int
     tv_content_id: str | None = None
+    matte: str = "none"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -60,9 +61,13 @@ class ImageStore:
                 fit_mode TEXT NOT NULL,
                 original_name TEXT NOT NULL,
                 size_bytes INTEGER NOT NULL,
-                tv_content_id TEXT
+                tv_content_id TEXT,
+                matte TEXT NOT NULL DEFAULT 'none'
             )"""
         )
+        cols = {r[1] for r in self._db.execute("PRAGMA table_info(images)")}
+        if "matte" not in cols:  # databases from 0.1.x
+            self._db.execute("ALTER TABLE images ADD COLUMN matte TEXT NOT NULL DEFAULT 'none'")
         self._db.commit()
 
     @staticmethod
@@ -82,7 +87,7 @@ class ImageStore:
         with self._lock:
             self._db.execute(
                 "INSERT INTO images VALUES (:id,:title,:created_at,:width,:height,:source_width,"
-                ":source_height,:fit_mode,:original_name,:size_bytes,:tv_content_id)",
+                ":source_height,:fit_mode,:original_name,:size_bytes,:tv_content_id,:matte)",
                 record.to_dict(),
             )
             self._db.commit()
@@ -107,6 +112,12 @@ class ImageStore:
         validate_id(image_id)
         with self._lock:
             self._db.execute("UPDATE images SET tv_content_id=? WHERE id=?", (content_id, image_id))
+            self._db.commit()
+
+    def set_matte(self, image_id: str, matte: str) -> None:
+        validate_id(image_id)
+        with self._lock:
+            self._db.execute("UPDATE images SET matte=? WHERE id=?", (matte, image_id))
             self._db.commit()
 
     def find_by_tv_content_id(self, content_id: str) -> ImageRecord | None:

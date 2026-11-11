@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.1.2"
+    "version": "0.2.0"
   },
   "paths": {
     "/health": {
@@ -341,6 +341,150 @@
         }
       }
     },
+    "/api/images/{image_id}/matte": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Passepartout eines Bildes festlegen (auf dem Fernseher sofort, sonst beim nächsten Upload)",
+        "operationId": "image_matte_api_images__image_id__matte_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/frame/mattes": {
+      "get": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Passepartouts, die der Fernseher anbietet",
+        "operationId": "mattes_api_frame_mattes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mattes"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/frame/remote-images/{content_id}/matte": {
+      "post": {
+        "tags": [
+          "frame"
+        ],
+        "summary": "Passepartout eines Bildes auf dem Fernseher ändern",
+        "operationId": "remote_matte_api_frame_remote_images__content_id__matte_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "content_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Remote Matte Api Frame Remote Images  Content Id  Matte Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/frame/random": {
       "post": {
         "tags": [
@@ -581,6 +725,18 @@
             "title": "Display",
             "description": "Nach dem Upload direkt auf dem Fernseher zeigen",
             "default": false
+          },
+          "matte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matte",
+            "description": "Passepartout (none, shadowbox_polar …); Standard aus der Konfiguration"
           }
         },
         "type": "object",
@@ -677,6 +833,12 @@
             "title": "Tv Content Id",
             "description": "ID auf dem Fernseher, sobald einmal übertragen"
           },
+          "matte": {
+            "type": "string",
+            "title": "Matte",
+            "description": "Passepartout, z. B. none oder shadowbox_polar",
+            "default": "none"
+          },
           "file_url": {
             "type": "string",
             "title": "File Url"
@@ -702,6 +864,48 @@
           "thumbnail_url"
         ],
         "title": "Image"
+      },
+      "MatteBody": {
+        "properties": {
+          "matte": {
+            "type": "string",
+            "title": "Matte",
+            "description": "none oder <stil>_<farbe>, z. B. shadowbox_polar",
+            "examples": [
+              "none",
+              "modern_polar"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "matte"
+        ],
+        "title": "MatteBody"
+      },
+      "Mattes": {
+        "properties": {
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types"
+          },
+          "colors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Colors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "types",
+          "colors"
+        ],
+        "title": "Mattes"
       },
       "RandomResult": {
         "properties": {
@@ -930,6 +1134,12 @@
             ],
             "title": "Tv Content Id",
             "description": "ID auf dem Fernseher, sobald einmal übertragen"
+          },
+          "matte": {
+            "type": "string",
+            "title": "Matte",
+            "description": "Passepartout, z. B. none oder shadowbox_polar",
+            "default": "none"
           },
           "file_url": {
             "type": "string",

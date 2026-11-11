@@ -33,7 +33,9 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | GET | `/health` | Lebenszeichen (ohne Token) |
 | GET | `/api/frame/status` | Verbindung, Art Mode, aktuelles Bild |
 | GET | `/api/images` | lokale Galerie |
-| POST | `/api/images` | Upload (`multipart/form-data`: `file`, `title`, `mode`=`fit`/`crop`, `display`=`true`/`false`) |
+| POST | `/api/images` | Upload (`multipart/form-data`: `file`, `title`, `mode`=`fit`/`crop`, `display`=`true`/`false`, `matte`=`none`/`shadowbox_polar`…) |
+| POST | `/api/images/{id}/matte` | Passepartout setzen (`{"matte": "none"}`) |
+| GET | `/api/frame/mattes` | verfügbare Passepartout-Stile und -Farben |
 | GET | `/api/images/{id}` | Metadaten |
 | DELETE | `/api/images/{id}` | nur lokale Kopie löschen |
 | POST | `/api/images/{id}/display` | auf dem Fernseher anzeigen |

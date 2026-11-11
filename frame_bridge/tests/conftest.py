@@ -24,6 +24,8 @@ class FakeFrame:
         self.art_mode = False
         self.fail = False
         self._n = 0
+        self.matte_of: dict[str, str] = {}
+        self.ignore_matte = False  # like a TV that silently refuses a matte
 
     configured = True
     paired = True
@@ -44,7 +46,7 @@ class FakeFrame:
     async def list_remote(self):
         self._check()
         return [{"content_id": c, "category_id": "MY-C0002", "width": 3840, "height": 2160,
-                 "image_date": "2026:11:11 10:00:00", "matte_id": "none"} for c in self.images]
+                 "image_date": "2026:11:11 10:00:00", "matte_id": self.matte_of.get(c, "none")} for c in self.images]
 
     async def thumbnail(self, content_id):
         self._check()
@@ -57,6 +59,7 @@ class FakeFrame:
         self._n += 1
         cid = f"MY_F{self._n:04d}"
         self.images[cid] = jpeg
+        self.matte_of[cid] = matte
         return cid
 
     async def select(self, content_id, show=True):
@@ -69,6 +72,15 @@ class FakeFrame:
     async def set_artmode(self, on):
         self._check()
         self.art_mode = on
+
+    async def mattes(self):
+        self._check()
+        return {"types": ["modern", "shadowbox", "flexible"], "colors": ["polar", "antique", "black"]}
+
+    async def change_matte(self, content_id, matte_id):
+        self._check()
+        if not self.ignore_matte:
+            self.matte_of[content_id] = matte_id
 
     async def close(self):
         pass

@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import INGRESS_PROXY_IP
-from .frame import FrameError, valid_content_id
+from .frame import FrameError, valid_content_id, valid_matte
 from .imaging import FIT_MODES, ImageError
 from .service import Bridge
 from .storage import InvalidImageId
@@ -41,6 +41,7 @@ class Image(BaseModel):
     original_name: str
     size_bytes: int
     tv_content_id: str | None = Field(None, description="ID auf dem Fernseher, sobald einmal übertragen")
+    matte: str = Field("none", description="Passepartout, z. B. none oder shadowbox_polar")
     file_url: str
     thumbnail_url: str
 
@@ -73,6 +74,21 @@ class RandomResult(BaseModel):
     content_id: str | None = Field(None, description="ID des jetzt angezeigten Bildes auf dem Fernseher")
     title: str
     image: Image | None = Field(None, description="Lokales Bild, falls vorhanden")
+
+
+class MatteBody(BaseModel):
+    matte: str = Field(description="none oder <stil>_<farbe>, z. B. shadowbox_polar", examples=["none", "modern_polar"])
+
+    def checked(self) -> str:
+        try:
+            return valid_matte(self.matte)
+        except FrameError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+
+class Mattes(BaseModel):
+    types: list[str]
+    colors: list[str]
 
 
 class ArtModeBody(BaseModel):
@@ -125,6 +141,7 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
         title: str | None = Form(None, max_length=200),
         mode: str = Form("fit", description="fit (Einpassen) oder crop (Zuschneiden)"),
         display: bool = Form(False, description="Nach dem Upload direkt auf dem Fernseher zeigen"),
+        matte: str | None = Form(None, description="Passepartout (none, shadowbox_polar …); Standard aus der Konfiguration"),
         b: Bridge = Depends(bridge),
     ):
         if mode not in FIT_MODES:
@@ -139,8 +156,8 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
         if not size:
             raise HTTPException(422, "Die Datei ist leer.")
         try:
-            rec, err = await b.add_image(b"".join(chunks), file.filename or "", title, mode, display)
-        except ImageError as exc:
+            rec, err = await b.add_image(b"".join(chunks), file.filename or "", title, mode, display, matte)
+        except (ImageError, FrameError) as exc:
             raise HTTPException(422, str(exc)) from None
         out = _image_out(rec)
         out["displayed"] = display and err is None
@@ -179,6 +196,33 @@ def build_api_router(get_bridge: Callable[[], Bridge], max_bytes: Callable[[], i
             return _image_out(await b.display(rec.id))
         except FrameError as exc:
             raise _frame_http(exc) from None
+
+    @r.post("/images/{image_id}/matte", tags=["images"], response_model=Image,
+            summary="Passepartout eines Bildes festlegen (auf dem Fernseher sofort, sonst beim nächsten Upload)")
+    async def image_matte(image_id: str, body: MatteBody, b: Bridge = Depends(bridge)):
+        rec = record_or_404(b, image_id)
+        try:
+            return _image_out(await b.set_local_matte(rec.id, body.checked()))
+        except FrameError as exc:
+            raise _frame_http(exc) from None
+
+    @r.get("/frame/mattes", tags=["frame"], response_model=Mattes, summary="Passepartouts, die der Fernseher anbietet")
+    async def mattes(b: Bridge = Depends(bridge)):
+        try:
+            return await b.mattes()
+        except FrameError as exc:
+            raise _frame_http(exc) from None
+
+    @r.post("/frame/remote-images/{content_id}/matte", tags=["frame"],
+            summary="Passepartout eines Bildes auf dem Fernseher ändern")
+    async def remote_matte(content_id: str, body: MatteBody, b: Bridge = Depends(bridge)) -> dict[str, str]:
+        try:
+            matte = body.checked()
+            valid_content_id(content_id)
+            await b.set_remote_matte(content_id, matte)
+        except FrameError as exc:
+            raise _frame_http(exc) from None
+        return {"content_id": content_id, "matte": body.matte}
 
     @r.post("/frame/random", tags=["frame"], response_model=RandomResult,
             summary="Zufälliges eigenes Bild anzeigen (Fernseher und Galerie, nie das aktuelle)")

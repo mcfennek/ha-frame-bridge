@@ -18,6 +18,7 @@ CLIENT_NAME = "FrameBridge"
 PORT = 8002
 MY_PHOTOS_CATEGORY = "MY-C0002"
 CONTENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+MATTE_RE = re.compile(r"^(none|[a-z0-9]{1,32}_[a-z0-9]{1,32})$")
 
 
 class FrameError(Exception):
@@ -34,6 +35,13 @@ def valid_content_id(content_id: str) -> str:
     return content_id
 
 
+def valid_matte(matte_id: str) -> str:
+    """'none' or '<type>_<colour>' as the TV names them, e.g. 'shadowbox_polar'."""
+    if not isinstance(matte_id, str) or not MATTE_RE.match(matte_id):
+        raise FrameError("Ungültiges Passepartout.")
+    return matte_id
+
+
 class FrameBackend(Protocol):
     @property
     def configured(self) -> bool: ...
@@ -46,6 +54,8 @@ class FrameBackend(Protocol):
     async def upload(self, jpeg: bytes, matte: str = "none") -> str: ...
     async def select(self, content_id: str, show: bool = True) -> None: ...
     async def set_artmode(self, on: bool) -> None: ...
+    async def mattes(self) -> dict[str, list[str]]: ...
+    async def change_matte(self, content_id: str, matte_id: str) -> None: ...
     async def close(self) -> None: ...
 
 
@@ -226,6 +236,27 @@ class SamsungFrame:
             await art.set_artmode(on)
 
         await self._call("Art Mode schalten", _do)
+
+    async def mattes(self) -> dict[str, list[str]]:
+        """Matte styles and colours this TV offers."""
+
+        async def _do(art):
+            types, colours = await art.get_matte_list(include_colour=True)
+            return {
+                "types": [t["matte_type"] for t in types if t.get("matte_type") and t["matte_type"] != "none"],
+                "colors": [c["color"] for c in colours if c.get("color")],
+            }
+
+        return await self._call("Passepartout-Liste", _do)
+
+    async def change_matte(self, content_id: str, matte_id: str) -> None:
+        valid_content_id(content_id)
+        valid_matte(matte_id)
+
+        async def _do(art):
+            await art.change_matte(content_id, matte_id, portrait_matte=matte_id)
+
+        await self._call("Passepartout ändern", _do)
 
     async def close(self) -> None:
         async with self._lock:

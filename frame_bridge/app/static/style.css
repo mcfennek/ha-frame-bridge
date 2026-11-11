@@ -58,7 +58,9 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .btn.danger { color: var(--bad); }
 .icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-pill);
   border: 1px solid transparent; background: transparent; color: var(--slate); cursor: pointer; }
-.icon-btn:hover { color: var(--bad); border-color: var(--line); }
+.icon-btn:hover { color: var(--ink); border-color: var(--line); }
+.icon-btn.del:hover { color: var(--bad); }
+.btn.small { min-height: 32px; padding: 4px 12px; font-size: .875rem; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .row.end { justify-content: flex-end; }
 
@@ -135,12 +137,14 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 28px 20px; }
 
 /* a framed print: thin dark frame, wide matte, image */
-.card { margin: 0; display: grid; gap: 10px; }
-.matte { background: var(--matte); padding: 7%; border: 6px solid var(--frame); border-radius: 2px;
+.card { margin: 0; display: grid; gap: 10px; align-content: start; }
+.matte { --mat: var(--matte); background: var(--mat); padding: 7%; border: 6px solid var(--frame); border-radius: 2px;
   box-shadow: 0 10px 18px -12px rgba(0,0,0,.45); }
 .matte img { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: var(--line);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 .card.on-tv .matte { border-color: var(--accent); }
+.card[data-matte="none"] .matte { padding: 0; background: var(--frame); line-height: 0; }
+.card[data-shadow] .matte img { box-shadow: 2px 3px 6px rgba(0,0,0,.35); }
 .card.on-tv .show, .card.on-tv .show:disabled { background: transparent; border-color: var(--accent); cursor: default; opacity: 1; }
 figcaption { display: grid; gap: 1px; padding: 0 2px; }
 .label-title { font-family: var(--serif); font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -150,6 +154,33 @@ figcaption { display: grid; gap: 1px; padding: 0 2px; }
 
 .empty { grid-column: 1 / -1; background: var(--paper); border-radius: var(--radius-lg); padding: 28px 20px; color: var(--slate); }
 .empty strong { color: var(--ink); display: block; margin-bottom: 4px; }
+
+/* matte picker */
+.matte-row { display: flex; align-items: center; gap: 10px; }
+.matte-row-label { color: var(--slate); font-size: .875rem; }
+.matte-row #upload-matte-label { flex: 1; }
+.matte-dialog { width: min(440px, calc(100% - 32px)); max-width: none; }
+.matte-dialog h3 { margin-bottom: 14px; }
+.matte-dialog fieldset { border: 0; margin: 0 0 14px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.matte-dialog legend { font-size: .875rem; color: var(--slate); margin-bottom: 8px; padding: 0; width: 100%; }
+.matte-preview { background: var(--frame); padding: 6px; border-radius: 2px; margin-bottom: 16px; }
+.mp-mat { --mat: #f4f3ef; background: var(--mat); padding: 9%; transition: padding .2s, background .2s;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.mp-mat img { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: var(--line);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.1); }
+.matte-preview[data-type="none"] .mp-mat { padding: 0; }
+.matte-preview[data-type="shadowbox"] .mp-mat img { box-shadow: 3px 4px 8px rgba(0,0,0,.35); }
+.matte-preview[data-type="modernthin"] .mp-mat { padding: 5%; }
+.matte-preview[data-type="modernwide"] .mp-mat { padding: 14%; }
+.chips label, .swatches label { position: relative; }
+.chips input, .swatches input { position: absolute; opacity: 0; }
+.chips span { display: block; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-pill);
+  cursor: pointer; font-size: .9rem; }
+.chips input:checked + span { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.swatches span { display: block; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+  cursor: pointer; background: var(--sw); }
+.swatches input:checked + span { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent); }
+.chips input:focus-visible + span, .swatches input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* settings */
 .panel { background: var(--paper); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; display: grid; gap: 12px; }

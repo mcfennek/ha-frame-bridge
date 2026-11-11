@@ -222,3 +222,80 @@ def test_openapi_is_31(env):
               "/api/images/{image_id}/display", "/api/frame/random", "/api/frame/remote-images"]:
         assert p in paths
     assert "HTTPBearer" in spec["components"]["securitySchemes"]
+
+
+def test_mattes_list(env):
+    m = env["ingress"].get("/api/frame/mattes").json()
+    assert "shadowbox" in m["types"] and "polar" in m["colors"]
+
+
+def test_upload_with_matte(env):
+    img = upload(env["ingress"], display="true", matte="shadowbox_polar").json()
+    assert img["matte"] == "shadowbox_polar"
+    assert env["frame"].matte_of[img["tv_content_id"]] == "shadowbox_polar"
+
+
+def test_upload_rejects_bad_matte(env):
+    assert upload(env["ingress"], matte="../etc").status_code == 422
+
+
+def test_change_matte_of_local_image_on_tv(env):
+    c, frame = env["ingress"], env["frame"]
+    img = upload(c, display="true").json()
+    assert frame.matte_of[img["tv_content_id"]] == "none"
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modern_antique"})
+    assert r.status_code == 200 and r.json()["matte"] == "modern_antique"
+    assert frame.matte_of[img["tv_content_id"]] == "modern_antique"
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "none"})
+    assert frame.matte_of[img["tv_content_id"]] == "none"
+
+
+def test_change_matte_of_local_image_not_on_tv_is_remembered(env):
+    c, frame = env["ingress"], env["frame"]
+    img = upload(c).json()
+    assert c.post(f"/api/images/{img['id']}/matte", json={"matte": "flexible_black"}).status_code == 200
+    shown = c.post(f"/api/images/{img['id']}/display").json()
+    assert frame.matte_of[shown["tv_content_id"]] == "flexible_black"
+
+
+def test_change_matte_of_tv_only_picture(env):
+    c, frame = env["ingress"], env["frame"]
+    frame.images["MY_F0002"] = b"x"
+    frame.matte_of["MY_F0002"] = "shadowbox_antique"
+    assert c.post("/api/frame/remote-images/MY_F0002/matte", json={"matte": "none"}).status_code == 200
+    assert frame.matte_of["MY_F0002"] == "none"
+    assert c.get("/api/frame/remote-images").json()["images"][0]["matte_id"] == "none"
+
+
+def test_refused_matte_is_reported_not_hidden(env):
+    c, frame = env["ingress"], env["frame"]
+    img = upload(c, display="true").json()
+    frame.ignore_matte = True
+    r = c.post(f"/api/images/{img['id']}/matte", json={"matte": "modern_polar"})
+    assert r.status_code == 502 and "nicht übernommen" in r.json()["detail"]
+    assert c.get(f"/api/images/{img['id']}").json()["matte"] == "none"  # not stored as if it worked
+
+
+def test_bad_matte_rejected(env):
+    c = env["ingress"]
+    img = upload(c).json()
+    for bad in ["../x", "Shadowbox_Polar", "a_b_c", ""]:
+        assert c.post(f"/api/images/{img['id']}/matte", json={"matte": bad}).status_code == 422
+    assert c.post("/api/frame/remote-images/MY_F0001/matte", json={"matte": "../x"}).status_code == 422
+
+
+def test_old_database_is_migrated(tmp_path):
+    import sqlite3
+    from app.storage import ImageStore
+    db = tmp_path / "old.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("""CREATE TABLE images (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL,
+        width INTEGER NOT NULL, height INTEGER NOT NULL, source_width INTEGER NOT NULL,
+        source_height INTEGER NOT NULL, fit_mode TEXT NOT NULL, original_name TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL, tv_content_id TEXT)""")
+    con.execute("INSERT INTO images VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                ("a" * 32, "Alt", "2026-11-11T08:00:00+00:00", 3840, 2160, 100, 100, "fit", "x.jpg", 1, "MY_F0003"))
+    con.commit(); con.close()
+    (tmp_path / "i").mkdir(); (tmp_path / "t").mkdir()
+    store = ImageStore(db, tmp_path / "i", tmp_path / "t")
+    assert store.get("a" * 32).matte == "none"

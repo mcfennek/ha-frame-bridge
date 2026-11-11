@@ -37,6 +37,87 @@ function confirmDialog(text, okLabel = "Löschen") {
   });
 }
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+// ---------------- matte (Passepartout) ----------------
+const MATTE_TYPES = {
+  modernthin: "Modern schmal", modern: "Modern", modernwide: "Modern breit", flexible: "Flexibel",
+  shadowbox: "Schattenbox", panoramic: "Panorama", triptych: "Triptychon", mix: "Mix", squares: "Quadrate",
+};
+const MATTE_COLORS = {
+  polar: ["Polarweiß", "#f4f3ef"], antique: ["Antik", "#e9e0cc"], warm: ["Warm", "#efe4d2"], neutral: ["Neutral", "#d9d7d2"],
+  sand: ["Sand", "#d8c8a8"], seafoam: ["Meeresgrün", "#a9c9bf"], sage: ["Salbei", "#b5bfa1"], burgandy: ["Bordeaux", "#6e2633"],
+  navy: ["Marine", "#25324d"], apricot: ["Aprikose", "#f0b98d"], byzantine: ["Byzantinisch", "#7d4f8f"],
+  lavender: ["Lavendel", "#c7bce0"], redorange: ["Rotorange", "#d9573a"], skyblue: ["Himmelblau", "#9cc6e6"],
+  turqoise: ["Türkis", "#3fa9a5"], black: ["Schwarz", "#1c1c1c"],
+};
+const FALLBACK_MATTES = { types: ["modernthin", "modern", "modernwide", "flexible", "shadowbox"], colors: ["polar", "antique", "warm", "neutral", "black"] };
+const titleCase = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+function paintMatte(card, id) {
+  const [t, c] = (id && id !== "none") ? id.split("_") : ["none", null];
+  card.dataset.matte = t;
+  if (t === "shadowbox") card.dataset.shadow = ""; else delete card.dataset.shadow;
+  if (c) card.querySelector(".matte").style.setProperty("--mat", (MATTE_COLORS[c] || [0, "#f4f3ef"])[1]);
+}
+function matteLabel(id) {
+  if (!id || id === "none") return "Ohne Passepartout";
+  const [t, c] = id.split("_");
+  return `${MATTE_TYPES[t] || titleCase(t)}, ${(MATTE_COLORS[c] || [titleCase(c || "")])[0]}`;
+}
+let matteCatalog = null;
+async function loadMatteCatalog() {
+  if (matteCatalog) return matteCatalog;
+  try { matteCatalog = { ...(await api("api/frame/mattes")), fromTv: true }; }
+  catch { matteCatalog = { ...FALLBACK_MATTES, fromTv: false }; }
+  return matteCatalog;
+}
+async function pickMatte(current, thumbUrl) {
+  const cat = await loadMatteCatalog();
+  const d = $("matte-dialog");
+  const [curType, curColor] = (current && current !== "none") ? current.split("_") : ["none", null];
+  const types = $("matte-types"), colors = $("matte-colors"), preview = $("matte-preview");
+  types.querySelectorAll("label").forEach((n) => n.remove());
+  colors.querySelectorAll("label").forEach((n) => n.remove());
+  const addChip = (value, text) => {
+    const l = document.createElement("label");
+    l.innerHTML = '<input type="radio" name="mtype"><span></span>';
+    l.firstChild.value = value; l.firstChild.checked = value === curType;
+    l.lastChild.textContent = text;
+    types.append(l);
+  };
+  addChip("none", "Ohne");
+  cat.types.forEach((t) => addChip(t, MATTE_TYPES[t] || titleCase(t)));
+  cat.colors.forEach((c, i) => {
+    const l = document.createElement("label");
+    l.innerHTML = '<input type="radio" name="mcolor"><span></span>';
+    l.firstChild.value = c;
+    l.firstChild.checked = c === curColor || (!curColor && i === 0);
+    const [name, hex] = MATTE_COLORS[c] || [titleCase(c), "#cccccc"];
+    l.lastChild.style.setProperty("--sw", hex);
+    l.title = name; l.lastChild.setAttribute("aria-label", name);
+    colors.append(l);
+  });
+  $("matte-preview-img").src = thumbUrl || "";
+  $("matte-note").textContent = cat.fromTv ? "" : "Die Liste kam nicht vom Fernseher; nicht jede Variante ist sicher verfügbar.";
+  const value = () => {
+    const t = types.querySelector("input:checked")?.value || "none";
+    if (t === "none") return "none";
+    return `${t}_${colors.querySelector("input:checked")?.value || cat.colors[0]}`;
+  };
+  const sync = () => {
+    const t = types.querySelector("input:checked")?.value || "none";
+    preview.dataset.type = t;
+    colors.hidden = t === "none";
+    const c = colors.querySelector("input:checked")?.value;
+    preview.querySelector(".mp-mat").style.setProperty("--mat", (MATTE_COLORS[c] || [0, "#f4f3ef"])[1]);
+  };
+  types.onchange = colors.onchange = sync;
+  sync();
+  return new Promise((resolve) => {
+    d.addEventListener("close", () => resolve(d.returnValue === "ok" ? value() : null), { once: true });
+    d.returnValue = "";
+    d.showModal();
+  });
+}
+
 const fmtBytes = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.round(n / 1024) + " kB");
 
 // ---------------- status ----------------
@@ -129,8 +210,16 @@ function renderLocal() {
     pic.alt = img.title;
     card.querySelector(".label-title").textContent = img.title;
     card.querySelector(".label-meta").textContent =
-      `${fmtDate(img.created_at)} · Original ${img.source_width}×${img.source_height} · ${img.fit_mode === "crop" ? "zugeschnitten" : "eingepasst"}`;
+      `${fmtDate(img.created_at)} · Original ${img.source_width}×${img.source_height} · ${img.fit_mode === "crop" ? "zugeschnitten" : "eingepasst"} · ${matteLabel(img.matte)}`;
+    paintMatte(card, img.matte);
     card.querySelector(".show").addEventListener("click", (ev) => showLocal(img, ev.currentTarget));
+    card.querySelector(".matte-btn").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      const m = await pickMatte(img.matte, img.thumbnail_url);
+      if (m === null || m === img.matte) return;
+      await applyMatte(btn, `api/images/${img.id}/matte`, m,
+        img.tv_content_id ? "auf dem Fernseher geändert" : "gespeichert – gilt beim Anzeigen");
+    });
     card.querySelector(".del").addEventListener("click", () => deleteLocal(img));
     grid.append(card);
   }
@@ -144,6 +233,17 @@ function markOnTv() {
     if (b) { b.textContent = on ? "Wird angezeigt" : "Auf TV anzeigen"; b.disabled = on; }
   });
 }
+async function applyMatte(btn, url, matte, doneText) {
+  btn.disabled = true;
+  try {
+    await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ matte }) });
+    toast(`${matteLabel(matte)}: ${doneText}`);
+    await loadImages();
+    if (state.tab === "tv") await loadTv();
+  } catch (e) { toast(e.message, true); }
+  btn.disabled = false;
+}
+
 async function showLocal(img, btn) {
   btn.disabled = true;
   btn.textContent = img.tv_content_id ? "Wird gewählt …" : "Wird übertragen …";
@@ -196,7 +296,16 @@ async function loadTv() {
       const meta = [it.local_id ? "Aus The Frame Bridge" : "Nur auf dem Fernseher"];
       if (it.width && it.height) meta.push(`${it.width}×${it.height}`);
       if (it.image_date) meta.push(it.image_date.split(" ")[0].replaceAll(":", "-"));
+      meta.push(matteLabel(it.matte_id));
+      paintMatte(card, it.matte_id);
       card.querySelector(".label-meta").textContent = meta.join(" · ");
+      card.querySelector(".matte-btn").addEventListener("click", async (ev) => {
+        const btn = ev.currentTarget;
+        const m = await pickMatte(it.matte_id || "none", pic.src);
+        if (m === null || m === (it.matte_id || "none")) return;
+        await applyMatte(btn, `api/frame/remote-images/${encodeURIComponent(it.content_id)}/matte`, m,
+          "auf dem Fernseher geändert");
+      });
       card.querySelector(".del").remove(); // TV images are never deleted from here
       card.querySelector(".show").addEventListener("click", async (ev) => {
         const b = ev.currentTarget;
@@ -248,6 +357,8 @@ function pickFile(f) {
   $("title").value = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   $("upload-msg").textContent = "";
   $("upload-msg").className = "msg";
+  state.uploadMatte = state.settings?.matte || "none";
+  $("upload-matte-label").textContent = matteLabel(state.uploadMatte);
   drop.hidden = true;
   $("prep").hidden = false;
   $("title").focus();
@@ -268,6 +379,12 @@ function resetUpload() {
   drop.hidden = false;
 }
 $("btn-cancel").addEventListener("click", resetUpload);
+$("btn-upload-matte").addEventListener("click", async () => {
+  const m = await pickMatte(state.uploadMatte || "none", previewUrl);
+  if (m === null) return;
+  state.uploadMatte = m;
+  $("upload-matte-label").textContent = matteLabel(m);
+});
 
 $("prep").addEventListener("submit", (ev) => {
   ev.preventDefault();
@@ -277,6 +394,7 @@ $("prep").addEventListener("submit", (ev) => {
   fd.append("title", $("title").value);
   fd.append("mode", document.querySelector('input[name="mode"]:checked').value);
   fd.append("display", $("display-now").checked ? "true" : "false");
+  fd.append("matte", state.uploadMatte || "none");
   const msg = $("upload-msg");
   const btn = $("btn-upload");
   btn.disabled = true;
@@ -336,7 +454,7 @@ async function loadSettings() {
       ["IP-Adresse", s.tv_host || "nicht eingestellt"],
       ["Media Player", s.media_player_entity || "nicht eingestellt"],
       ["Kopplung", s.paired ? "gekoppelt (eigenes Token)" : "nicht gekoppelt"],
-      ["Passepartout", s.matte],
+      ["Standard-Passepartout", matteLabel(s.matte)],
       ["Add-on-Version", s.version],
     ]);
     kv($("set-storage"), [
