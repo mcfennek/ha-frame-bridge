@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Im Tab „Auf dem Fernseher“ hat jedes eigene Bild einen Löschen-Knopf. Gelöscht wird erst nach Bestätigung; der Dialog sagt, ob das Original in der Galerie erhalten bleibt oder das Bild endgültig weg ist.
+
 ## 0.5.0
 
 - Passepartout ändern lädt nicht mehr unnötig neu hoch: Eine Kopie mit dem gewünschten Passepartout, die schon auf dem Fernseher liegt, wird wiederverwendet. Das Add-on führt dazu Buch über alle seine Kopien auf dem Fernseher.

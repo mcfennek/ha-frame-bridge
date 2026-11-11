@@ -3,7 +3,7 @@
   "info": {
     "title": "The Frame Bridge API",
     "description": "REST-API für The Frame Bridge. Alle Endpunkte unter /api erfordern `Authorization: Bearer <Token>`. Das Token steht in der Weboberfläche unter Einstellungen.",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "paths": {
     "/health": {

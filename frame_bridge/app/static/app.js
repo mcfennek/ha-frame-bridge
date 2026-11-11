@@ -273,6 +273,22 @@ async function showLocal(img, btn) {
   } catch (e) { toast(e.message, true); btn.textContent = "Auf TV anzeigen"; }
   btn.disabled = false;
 }
+async function deleteFromTv(it, btn) {
+  const name = it.local_title ? `„${it.local_title}“ (${it.content_id})` : it.content_id;
+  const showing = it.content_id === state.currentContentId;
+  const text = `${name} vom Fernseher löschen? Das lässt sich nicht rückgängig machen.`
+    + (it.local_id ? " Das Original bleibt in der Galerie gespeichert und kann wieder angezeigt werden."
+                   : " Das Bild liegt nur auf dem Fernseher – es ist danach endgültig weg.")
+    + (showing ? " Es wird gerade angezeigt; der Fernseher wechselt danach zu einem anderen Bild." : "");
+  if (!(await confirmDialog(text, "Vom Fernseher löschen"))) return;
+  btn.disabled = true;
+  try {
+    await api(`api/frame/remote-images/${encodeURIComponent(it.content_id)}?confirm=true`, { method: "DELETE" });
+    toast(`${it.local_title || it.content_id} vom Fernseher gelöscht`);
+    await Promise.all([loadTv(), loadImages(), loadStatus()]);
+  } catch (e) { toast(e.message, true); btn.disabled = false; }
+}
+
 async function deleteLocal(img) {
   const ok = await confirmDialog(`„${img.title}“ aus der Galerie löschen? Ein bereits auf den Fernseher übertragenes Bild bleibt dort erhalten.`);
   if (!ok) return;
@@ -325,7 +341,9 @@ async function loadTv() {
         await applyMatte(btn, `api/frame/remote-images/${encodeURIComponent(it.content_id)}/matte`, m,
           "auf dem Fernseher geändert");
       });
-      card.querySelector(".del").remove(); // TV images are never deleted from here
+      const delBtn = card.querySelector(".del");
+      delBtn.title = delBtn.ariaLabel = "Vom Fernseher löschen";
+      delBtn.addEventListener("click", () => deleteFromTv(it, delBtn));
       card.querySelector(".show").addEventListener("click", async (ev) => {
         const b = ev.currentTarget;
         b.disabled = true;
