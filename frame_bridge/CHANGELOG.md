@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Bilder auf dem Fernseher werden nicht mehr doppelt angezeigt (der Fernseher führt jedes eigene Bild in zwei Kategorien).
+- Programmlogik und Gestaltung sind direkt in die Seite eingebettet – nach einem Update kann der Browser keine veraltete Version mehr verwenden.
+- Versionsnummer unten auf der Seite.
+
 ## 0.2.1
 
 - Nach einem Update lädt die Oberfläche immer die neuen Programmdateien (vorher konnte der Browser die alte Version weiterverwenden – der Passepartout-Knopf reagierte dann nicht).

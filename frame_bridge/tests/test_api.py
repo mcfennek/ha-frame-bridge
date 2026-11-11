@@ -301,8 +301,34 @@ def test_old_database_is_migrated(tmp_path):
     assert store.get("a" * 32).matte == "none"
 
 
-def test_assets_are_versioned_and_revalidated(env):
+def test_page_inlines_current_script(env):
     from app import __version__
     html = env["ingress"].get("/")
-    assert f"static/app.js?v={__version__}" in html.text and "no-store" in html.headers["cache-control"]
-    assert env["ingress"].get(f"/static/app.js?v={__version__}").headers["cache-control"] == "no-cache"
+    assert "no-store" in html.headers["cache-control"]
+    assert 'src="static/app.js"' not in html.text and "static/style.css" not in html.text
+    assert f'FRAME_BRIDGE_VERSION = "{__version__}"' in html.text
+    assert "function pickMatte" in html.text and f"The Frame Bridge {__version__}" in html.text
+
+
+def test_real_adapter_dedupes_tv_list(tmp_path):
+    import asyncio
+    from app.frame import SamsungFrame
+
+    class Art:
+        async def available(self, category=None, timeout=10):
+            return [
+                {"content_id": "MY_F0003", "category_id": "MY-C0008", "matte_id": "none", "width": 3840, "height": 2160},
+                {"content_id": "SAM-S5954", "category_id": "MY-C0008", "matte_id": "SHADOWBOX_POLAR"},
+                {"content_id": "MY_F0002", "category_id": "MY-C0002", "matte_id": "SHADOWBOX_ANTIQUE"},
+                {"content_id": "MY_F0003", "category_id": "MY-C0002", "matte_id": "none", "width": 3840, "height": 2160},
+            ]
+
+    f = SamsungFrame("1.2.3.4", tmp_path / "t.txt")
+
+    async def client():
+        return Art()
+
+    f._client = client
+    items = asyncio.run(f.list_remote())
+    assert [i["content_id"] for i in items] == ["MY_F0003", "MY_F0002"]
+    assert items[1]["matte_id"] == "shadowbox_antique"

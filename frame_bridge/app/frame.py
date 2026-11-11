@@ -183,11 +183,13 @@ class SamsungFrame:
             # The 2025 Frame does not always report own photos under MY-C0002, so fetch everything
             # and recognise own photos by their id.
             items = await art.available(None, timeout=15)
-            out = []
+            out, seen = [], set()
             for item in items or []:
                 cid = item.get("content_id")
-                if not cid or not CONTENT_ID_RE.match(cid) or not cid.startswith(OWN_PHOTO_PREFIX):
+                # the TV lists each own photo in more than one category
+                if not cid or cid in seen or not CONTENT_ID_RE.match(cid) or not cid.startswith(OWN_PHOTO_PREFIX):
                     continue
+                seen.add(cid)
                 out.append(
                     {
                         "content_id": cid,

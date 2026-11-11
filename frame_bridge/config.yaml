@@ -1,5 +1,5 @@
 name: The Frame Bridge
-version: "0.2.1"
+version: "0.2.2"
 slug: frame_bridge
 description: Bildergalerie, Upload und REST-API für Samsung The Frame
 url: https://github.com/mcfennek/ha-frame-bridge
